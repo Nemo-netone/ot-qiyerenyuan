@@ -1,0 +1,32 @@
+.DS_Store
+*.log
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Java / Maven
+target/
+hrm/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Node / Vue
+node_modules/
+**/node_modules/
+dist/
+vue-elementui-hrm/dist/
+yarn.lock
+
+# Local env and platform cache
+.env.local
+.env.*.local
+.wrangler/
+supabase/.temp/
+
+# Runtime upload files
+hrm/file/
+uploads/
+*.zip

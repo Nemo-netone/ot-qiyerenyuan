@@ -1,0 +1,16 @@
+.git
+.idea
+.vscode
+*.iml
+
+vue-elementui-hrm/node_modules
+vue-elementui-hrm/dist
+vue-elementui-hrm/.cache
+
+hrm/target
+hrm/file
+
+node_modules
+dist
+supabase/.temp
+*.log
