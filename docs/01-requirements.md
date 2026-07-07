@@ -39,8 +39,8 @@
 
 ## 验收清单
 
-- [ ] GitHub 公开仓库可访问。
-- [ ] Cloudflare Pages 地址可访问。
-- [ ] CloudBase API 能连 Supabase。
-- [ ] `admin / 123456` 可登录。
-- [ ] 至少员工/部门/菜单/首页统计接口可正常返回。
+- [x] GitHub 公开仓库可访问。
+- [x] Cloudflare Pages 地址可访问。
+- [x] CloudBase API 能连 Supabase。
+- [x] `admin / 123456` 可登录。
+- [x] 至少员工/部门/菜单/首页统计接口可正常返回。

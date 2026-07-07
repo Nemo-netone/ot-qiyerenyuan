@@ -16,6 +16,8 @@
 | --- | --- | --- |
 | 管理员 | `admin` | `123456` |
 
+当前状态：`main` 分支已推送 GitHub，Cloudflare Pages 已发布，CloudBase API 已连接 Supabase 的 `hrm_qiyerenyuan` 独立 schema。登录、首页统计、员工分页、部门列表、菜单接口已完成线上冒烟验证。
+
 ## 功能总览
 
 | 模块 | 能力 | 使用场景 |

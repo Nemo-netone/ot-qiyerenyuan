@@ -62,3 +62,14 @@ wrangler pages deploy vue-elementui-hrm/dist --project-name ot-qiyerenyuan --bra
 2. 使用 `admin / 123456` 登录。
 3. 验证首页统计、员工列表、部门列表、菜单接口。
 4. 打开浏览器 Network，确认请求目标是 CloudBase API，不是 localhost。
+
+2026-07-07 已验收通过：
+
+| 检查项 | 结果 |
+| --- | --- |
+| Pages 稳定地址 | `200 OK` |
+| `config.js` API 基址 | 指向 CloudBase API |
+| CORS 预检与登录 | 通过 |
+| `admin / 123456` 登录 | 返回 token |
+| `/home/count`、`/home/staff`、`/home/department` | `code=200` |
+| `/staff/page`、`/dept/all`、`/menu/staff` | `code=200` |
