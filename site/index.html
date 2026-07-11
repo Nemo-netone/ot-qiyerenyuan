@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>美妆商城管理平台</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="publicView" class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Portfolio Demo</p>
+        <h1>美妆商城管理平台</h1>
+      </div>
+      <a class="ghost-link" href="https://github.com/Nemo-netone/ot-meizhuang" target="_blank" rel="noreferrer">GitHub</a>
+    </header>
+
+    <main class="landing">
+      <section class="intro-panel">
+        <div class="visual-board" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <h2>面向美妆商品、店铺、订单、购物车、促销和咨询的商城演示系统。</h2>
+        <p>线上版本使用 Cloudflare Pages、Pages Functions 和 Supabase 独立 schema，保留原项目主题，同时把核心流程整理成稳定可演示的作品集界面。</p>
+        <div class="module-pills" id="modulePills"></div>
+      </section>
+
+      <section class="login-panel" id="login">
+        <div class="panel-heading">
+          <p class="eyebrow">Demo Login</p>
+          <h2>演示账号</h2>
+        </div>
+        <form id="loginForm">
+          <label>角色
+            <select id="role"></select>
+          </label>
+          <label>用户名
+            <input id="username" autocomplete="username" required />
+          </label>
+          <label>密码
+            <input id="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary-button" type="submit">登录演示系统</button>
+          <p class="form-message" id="loginMessage"></p>
+        </form>
+        <div class="quick-logins" id="quickLogins"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="appView" class="app" hidden>
+    <aside class="sidebar">
+      <div class="brand-block">
+        <p class="eyebrow">Workspace</p>
+        <h2>美妆商城管理平台</h2>
+        <span id="roleText"></span>
+      </div>
+      <nav id="moduleNav"></nav>
+      <button id="logoutButton" class="secondary-button" type="button">退出登录</button>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-header">
+        <div>
+          <p class="eyebrow">Main Branch Demo</p>
+          <h1 id="pageTitle">工作台</h1>
+        </div>
+        <div class="toolbar">
+          <input id="searchInput" placeholder="搜索当前模块" />
+          <button id="refreshButton" type="button">刷新</button>
+          <button id="addButton" class="primary-button" type="button">新增</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="dashboard"></section>
+      <section id="modulePanel" class="module-panel" hidden>
+        <div class="module-heading">
+          <div>
+            <h2 id="moduleTitle"></h2>
+            <p id="moduleSummary"></p>
+          </div>
+          <span id="recordCount"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="editDialog">
+    <form id="editForm" method="dialog">
+      <div class="dialog-head">
+        <h2 id="dialogTitle">编辑</h2>
+        <button id="closeDialogButton" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="form-grid" id="formFields"></div>
+      <div class="dialog-actions">
+        <button id="cancelEditButton" type="button">取消</button>
+        <button class="primary-button" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
