@@ -23,6 +23,10 @@ async function init() {
 }
 
 function renderPublic() {
+  $("#projectTitle").textContent = CONFIG.title;
+  $("#projectPositioning").textContent = CONFIG.positioning;
+  $("#appTitle").textContent = CONFIG.title;
+  $("#githubLink").href = CONFIG.githubUrl;
   $("#modulePills").innerHTML = CONFIG.modules.map((item) => `<span>${escapeHtml(item.name)}</span>`).join("");
 }
 
