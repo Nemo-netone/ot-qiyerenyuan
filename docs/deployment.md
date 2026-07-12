@@ -37,14 +37,10 @@ cloudbase --env-id meta-d5gh4ds014005aff1 cloudrun deploy \
 
 ## 3. 构建并部署 Cloudflare Pages
 
-先让前端指向 CloudBase API：
+当前生产发布目录是仓库根目录下的 `original-site/`，其中包含恢复后的原 Vue 构建产物与 Pages Worker 兼容 API：
 
 ```bash
-cd vue-elementui-hrm
-npm install
-npm run build
-cd ..
-wrangler pages deploy vue-elementui-hrm/dist --project-name ot-qiyerenyuan --branch main
+wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 ```
 
 如果 Cloudflare Pages 使用 GitHub 自动构建：
@@ -52,9 +48,9 @@ wrangler pages deploy vue-elementui-hrm/dist --project-name ot-qiyerenyuan --bra
 | 设置项 | 值 |
 | --- | --- |
 | Production branch | `main` |
-| Build command | `cd vue-elementui-hrm && npm install && npm run build` |
-| Build output directory | `vue-elementui-hrm/dist` |
-| Environment variable | `VUE_APP_BASE_API=https://ot-qiyerenyuan-api-273280-7-1369167244.sh.run.tcloudbase.com` |
+| Build command | 留空 |
+| Build output directory | `original-site` |
+| Runtime API | `original-site/_worker.js` |
 
 ## 4. 线上验收
 

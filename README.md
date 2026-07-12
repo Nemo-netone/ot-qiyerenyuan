@@ -37,7 +37,7 @@
 
 ```text
 Browser
-  -> Cloudflare Pages: vue-elementui-hrm/dist
+  -> Cloudflare Pages: original-site
   -> CloudBase Run: Spring Boot API, service ot-qiyerenyuan-api
   -> Supabase PostgreSQL: schema hrm_qiyerenyuan
 ```
@@ -91,7 +91,7 @@ cd vue-elementui-hrm && npm run build
 cloudbase --env-id meta-d5gh4ds014005aff1 cloudrun deploy --serviceName ot-qiyerenyuan-api --port 8888 --source <clean-backend-source> --force
 
 # Cloudflare Pages 部署
-wrangler pages deploy vue-elementui-hrm/dist --project-name ot-qiyerenyuan --branch main
+wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 ```
 
 ## 文档索引
