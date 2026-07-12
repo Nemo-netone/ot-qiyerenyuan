@@ -39,7 +39,7 @@
       </template>
       <el-menu-item
         v-for="subItem in item.children"
-        @click="clickMenu(subItem,item.path + subItem.path)"
+        @click="clickMenu(subItem,subItem.path)"
         :key="subItem.id"
         :index="subItem.name"
       >

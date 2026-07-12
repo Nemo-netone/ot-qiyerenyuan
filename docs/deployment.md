@@ -97,3 +97,14 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 - `/health`、`/login`、`/staff/page`、`/dept/all`、`/menu/staff` 均返回 `code=200`
 - Playwright 验证 11 个核心页面：表格均有数据、无 `pageerror`、无 HTTP 4xx/5xx、无桌面横向溢出
 - 390×844 移动端登录和首页通过，无 `pageerror`、无横向溢出
+## 2026-07-12 侧边栏菜单跳转修复
+
+侧边栏子菜单数据已经包含完整路径，例如 `/system/staff`，但组件点击事件又拼接父级 `/system`，导致实际跳转到不存在的 `/system/system/staff`；考勤、薪资和权限菜单同样出现重复路径。
+
+修复与验收：
+
+- `CommonAside.vue` 子菜单直接使用 `subItem.path`，不再重复拼接父路径
+- 重新构建 Vue 生产资源并部署到 Cloudflare Pages
+- 真实展开父菜单并点击 10 个子菜单，全部进入预期页面
+- 所有页面均有业务数据，无 `pageerror`、无 HTTP 4xx/5xx
+- 修复部署版本：https://fc60f52b.ot-qiyerenyuan.pages.dev
