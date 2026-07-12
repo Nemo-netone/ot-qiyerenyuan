@@ -9,6 +9,9 @@
         size="mini"
       ></el-button>
     </div>
+    <div class="project-title" aria-label="第四组生产实习项目">
+      第四组生产实习项目
+    </div>
     <div class="r-content">
       <el-dropdown trigger="hover" size="mini" @command="handleCommand">
         <span>
@@ -450,10 +453,45 @@ export default {
 </script>
 <style lang="less" scoped>
 header {
+  position: relative;
   display: flex;
   height: 100%;
   justify-content: space-between;
   align-items: center;
+}
+
+.project-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-family: "STKaiti", "KaiTi", "FZKai-Z03", serif;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.45),
+    0 3px 10px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(255, 255, 255, 0.22);
+}
+
+.project-title::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -7px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+}
+
+@media (max-width: 900px) {
+  .project-title {
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
 }
 
 .l-content {

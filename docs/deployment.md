@@ -108,3 +108,10 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 - 真实展开父菜单并点击 10 个子菜单，全部进入预期页面
 - 所有页面均有业务数据，无 `pageerror`、无 HTTP 4xx/5xx
 - 修复部署版本：https://fc60f52b.ot-qiyerenyuan.pages.dev
+## 2026-07-12 顶栏项目标题
+
+在后台深色顶栏中央增加白色艺术字“第四组生产实习项目”，使用楷体字族、字间距、柔和高光阴影和渐隐下划线；标题采用绝对居中，不受左侧折叠按钮和右侧头像宽度影响。
+
+- 稳定地址：https://ot-qiyerenyuan.pages.dev
+- 修复部署版本：https://c535f7ee.ot-qiyerenyuan.pages.dev
+- Playwright 检查：标题文字、白色样式、字体和居中位置正确，无 `pageerror`
