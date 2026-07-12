@@ -4,6 +4,7 @@ const API_ROOTS = new Set([
   "home",
   "staff",
   "department",
+  "dept",
   "attendance",
   "staff-leave",
   "city",
@@ -66,7 +67,7 @@ async function handleApi(parts, params, request) {
   if (root === "home") return home(action);
   if (root === "docs") return docs(action);
   if (root === "staff") return staff(action, id, params, request.method);
-  if (root === "department") return department(action, id, params, request.method);
+  if (root === "department" || root === "dept") return department(action, id, params, request.method);
   if (root === "attendance") return attendance(action, id, params, request.method);
   if (root === "staff-leave") return staffLeave(action, id, params, request.method);
   if (root === "city") return city(action, id, params, request.method);
@@ -219,10 +220,10 @@ function staffRows() {
 
 function departments() {
   return [
-    { id: 1, name: "总经办", code: "CEO", leader: "系统管理员", phone: "021-80000001", staffNum: 4, salaryMultiple: 1.5 },
-    { id: 2, name: "人力资源部", code: "HR", leader: "HR专员", phone: "021-80000002", staffNum: 8, salaryMultiple: 1.2 },
-    { id: 3, name: "研发部", code: "RD", leader: "普通员工", phone: "021-80000003", staffNum: 18, salaryMultiple: 1.4 },
-    { id: 4, name: "市场部", code: "MKT", leader: "市场主管", phone: "021-80000004", staffNum: 6, salaryMultiple: 1.1 },
+    { id: 1, name: "总经办", code: "CEO", leader: "系统管理员", phone: "021-80000001", staffNum: 4, salaryMultiple: 1.5, children: [] },
+    { id: 2, name: "人力资源部", code: "HR", leader: "HR专员", phone: "021-80000002", staffNum: 8, salaryMultiple: 1.2, children: [] },
+    { id: 3, name: "研发部", code: "RD", leader: "普通员工", phone: "021-80000003", staffNum: 18, salaryMultiple: 1.4, children: [] },
+    { id: 4, name: "市场部", code: "MKT", leader: "市场主管", phone: "021-80000004", staffNum: 6, salaryMultiple: 1.1, children: [] },
   ];
 }
 
@@ -322,7 +323,8 @@ function page(rows, params = {}) {
   const current = Math.max(Number(params.current || params.pageNum || params.page || 1), 1);
   const size = Math.max(Number(params.size || params.pageSize || params.limit || 10), 1);
   const start = (current - 1) * size;
-  return ok({ data: { records: rows.slice(start, start + size), total: rows.length, current, size } });
+  const list = rows.slice(start, start + size);
+  return ok({ data: { list, records: list, total: rows.length, current, size } });
 }
 
 async function requestParams(request, url) {

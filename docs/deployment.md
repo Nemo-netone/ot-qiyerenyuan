@@ -72,14 +72,28 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 
 ## 2026-07-11 Pages Worker 恢复部署
 
-原 CloudBase Run 后端已出现 503、CORS 或资源隔离问题。线上演示已切换为 Cloudflare Pages Worker + Supabase 独立 schema：
+原 CloudBase Run 后端已出现 503、CORS 或资源隔离问题。线上演示已切换为 Cloudflare Pages Worker 兼容层：
 
 - Pages 项目：`ot-qiyerenyuan`
 - 稳定地址：https://ot-qiyerenyuan.pages.dev
-- Supabase schema：`hrm_qiyerenyuan`
-- API：`/health`、`/api/login`、`/api/summary`、`/api/items/*`
-- 数据：3 个公开演示账号、18 条业务记录
-- 验证：全部账号登录、summary、列表、创建、更新、删除清理和 Playwright 登录前后视图均通过
+- API：`/health`、`/login`、`/home/*`、`/staff/*`、`/dept/*`、`/menu/*` 等原 HRM 路由
+- 数据：3 个公开演示账号和各业务模块演示数据
+- 原 Java/Vue/SSM 源码继续保留；Pages Worker 负责稳定的公开作品集体验
 
-原 Java/Vue/SSM 源码继续保留；兼容层只负责稳定的公开作品集体验。
+## 2026-07-12 列表功能修复部署
 
+线上登录和首页可用，但员工、部门、考勤、薪资等页面出现“共 N 条”却显示“暂无数据”，并在浏览器中反复抛出 `undefined.forEach`。
+
+根因与修复：
+
+- 原 Vue 页面读取分页字段 `response.data.list`，Worker 只返回了 `records`；现在同时返回 `list` 和 `records`
+- 原 Vue 部门接口使用 `/dept/*`，Worker 只注册了 `/department/*`；现在 `dept` 复用同一个部门处理器
+- 部门下拉会遍历 `children`；顶级部门现在显式返回 `children: []`
+
+部署与验收：
+
+- Cloudflare Pages 稳定地址：https://ot-qiyerenyuan.pages.dev
+- 修复部署版本：https://426bdfe0.ot-qiyerenyuan.pages.dev
+- `/health`、`/login`、`/staff/page`、`/dept/all`、`/menu/staff` 均返回 `code=200`
+- Playwright 验证 11 个核心页面：表格均有数据、无 `pageerror`、无 HTTP 4xx/5xx、无桌面横向溢出
+- 390×844 移动端登录和首页通过，无 `pageerror`、无横向溢出
