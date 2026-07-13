@@ -1,6 +1,6 @@
 <template>
   <el-container class="app-shell">
-    <el-aside class="app-aside" width="auto">
+    <el-aside class="app-aside" width="220px">
 
       <common-aside/>
       <!-- 引入侧边栏 -->
@@ -46,8 +46,20 @@ export default {
 }
 
 .app-aside {
+  width: 220px !important;
+  min-width: 220px;
+  max-width: 220px;
+  height: 100vh;
+  flex: 0 0 220px;
+  overflow: hidden;
   box-shadow: 2px 0 6px rgb(0 21 41 / 35%);
   z-index: 20;
+}
+
+.app-content {
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -57,6 +69,11 @@ export default {
   }
 
   .app-aside {
+    width: 64px !important;
+    min-width: 64px;
+    max-width: 64px;
+    height: 100vh;
+    flex-basis: 64px;
     position: absolute;
     left: 0;
     top: 0;
@@ -64,7 +81,6 @@ export default {
   }
 
   .app-content {
-    min-width: 0;
     margin-left: 64px;
   }
 

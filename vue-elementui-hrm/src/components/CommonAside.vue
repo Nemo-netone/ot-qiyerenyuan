@@ -52,18 +52,43 @@
 
 <style lang="less" scoped>
 .el-menu-vertical-demo:not(.el-menu--collapse) {
-  width: 200px;
-  min-height: 400px;
+  width: 220px;
 }
 
 .el-menu {
-  height: 100%;
+  width: 220px;
+  height: 100vh;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: none; /* 无边框 */
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 38%) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 6px;
+    background: rgb(255 255 255 / 38%);
+  }
 
   h3 {
     color: #fff;
     text-align: center; /* 字体居中 */
     line-height: 48px; /* 行高 */
+  }
+}
+
+@media (max-width: 768px) {
+  .el-menu,
+  .el-menu.el-menu--collapse {
+    width: 64px;
   }
 }
 </style>
@@ -97,11 +122,11 @@ export default {
   },
   mounted () {
     this.handleResize = () => {
-      if (window.innerWidth <= 768) this.isCollapse = true
+      this.isCollapse = window.innerWidth <= 768
     }
     window.addEventListener('resize', this.handleResize)
     this.$bus.$on('collapseMenu', () => {
-      this.isCollapse = !this.isCollapse
+      this.isCollapse = window.innerWidth <= 768
     })
   },
   beforeDestroy () {
