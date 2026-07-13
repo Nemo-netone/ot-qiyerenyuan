@@ -1,7 +1,7 @@
 import request from '../utils/request'
 import { buildApiUrl } from '../utils/apiBase'
 
-const url = "/city"
+const url = '/city'
 
 /**
  * 添加
@@ -21,13 +21,13 @@ export const add = (data) => {
  */
 export const deleteOne = (id) => {
   return request({
-    url: url + '/' + id, method: 'delete',
+    url: url + '/' + id, method: 'delete'
   })
 }
 
 export const deleteBatch = (ids) => {
   return request({
-    url: url + '/batch/' + ids, method: 'delete',
+    url: url + '/batch/' + ids, method: 'delete'
   })
 }
 
@@ -57,7 +57,6 @@ export const getOne = (id) => {
     url: url + '/' + id
   })
 }
-
 
 // 数据导入
 export const getImportApi = () => {

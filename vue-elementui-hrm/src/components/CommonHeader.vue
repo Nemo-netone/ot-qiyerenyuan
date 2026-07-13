@@ -319,7 +319,7 @@ export default {
       return getDownloadApi()
     },
     avatar () {
-      return this.staff.avatar ? this.downloadApi + this.staff.avatar : require('../assets/images/avatar.png')
+      return this.staff && this.staff.avatar ? this.downloadApi + this.staff.avatar : require('../assets/images/avatar.png')
     }
   },
   methods: {
@@ -487,10 +487,19 @@ header {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .project-title {
-    font-size: 18px;
-    letter-spacing: 0.08em;
+    left: 56%;
+    max-width: 58vw;
+    overflow: hidden;
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+  }
+
+  .r-content .avatar {
+    width: 32px;
+    height: 32px;
   }
 }
 

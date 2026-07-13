@@ -19,7 +19,8 @@ export default {
     // 退出登录
     logout ({ commit }) {
       // 清除本地缓存
-      localStorage.clear()
+      commit('token/CLEAR_TOKEN', null, { root: true })
+      localStorage.removeItem('staff')
       // 清除vuex中的菜单数据
       commit('menu/CLEAR_MENU', null, { root: true })
       // 清除vuex中的标签数据

@@ -115,3 +115,18 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 - 稳定地址：https://ot-qiyerenyuan.pages.dev
 - 修复部署版本：https://c535f7ee.ot-qiyerenyuan.pages.dev
 - Playwright 检查：标题文字、白色样式、字体和居中位置正确，无 `pageerror`
+## 2026-07-13 功能真实性与安全优化
+
+本次完成作品集演示的五项核心优化：
+
+1. 员工、部门、文档、考勤、请假、城市社保、社保、薪资、角色和菜单数据通过 Supabase `items` 表持久化，新增、修改、删除和审批刷新后仍保留。
+2. 登录从 Supabase `accounts` 表校验，Worker 签发 HMAC token；除登录和健康检查外，全部业务接口要求有效 token。
+3. 管理员和人事专员可以写入，普通员工为只读账号；未登录返回 HTTP 401，越权写入返回 HTTP 403。
+4. 390px 移动端默认折叠为 64px 侧栏、隐藏标签栏、内容区无横向页面溢出。
+5. 页面明确展示作品集演示说明；导入、导出和文件上传返回 HTTP 501，不再伪装成功。
+
+验证：
+
+- 自动化脚本：`python tests/deployed_e2e.py`
+- 覆盖未登录拒绝、管理员 CRUD 持久化、普通员工写入拒绝、10 个菜单真实点击和移动端布局。
+- 修复部署版本：https://25a9ee78.ot-qiyerenyuan.pages.dev

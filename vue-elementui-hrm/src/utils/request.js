@@ -33,8 +33,13 @@ instance.interceptors.response.use(response => {
     return res
   }
 }, error => {
+  const status = error.response && error.response.status
+  const message = (error.response && error.response.data && error.response.data.message) || error.message
+  if (status === 401) {
+    return store.dispatch('staff/logout').then(() => Promise.reject(error))
+  }
   ElementUI.Message({
-    message: error.message,
+    message,
     type: 'error',
     duration: 5 * 1000
   })

@@ -249,7 +249,7 @@ export default {
       return year + '年' + month + '月' + currentDate + '日' + ' ' + this.dayOfWeek[day]
     },
     avatar () {
-      return this.staff.avatar ? this.downloadApi + this.staff.avatar : require('../../assets/images/avatar.png')
+      return this.staff && this.staff.avatar ? this.downloadApi + this.staff.avatar : require('../../assets/images/avatar.png')
     }
   },
   watch: {
