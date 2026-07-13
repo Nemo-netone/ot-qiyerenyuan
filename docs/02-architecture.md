@@ -41,4 +41,4 @@ UI action
 
 ## 已知限制
 
-文件上传目前写入容器本地目录。CloudBase Run 容器文件系统不适合作为长期持久化存储，所以该能力适合演示；生产应迁移到对象存储或 Supabase Storage。
+文件内容和元数据由 Pages Worker 写入 Supabase 隔离 schema，上传、下载和删除操作均进行登录与角色校验。单文件限制为 2MB；需要更大文件时应迁移到 Supabase Storage 或对象存储。

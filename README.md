@@ -1,8 +1,8 @@
 # ot-qiyerenyuan
 
-企业人员与人力资源管理演示系统。前端使用 Vue 2 + Element UI，后端使用 Spring Boot + MyBatis-Plus，线上部署目标为 Cloudflare Pages + CloudBase Run + Supabase PostgreSQL。
+企业人员与人力资源管理系统。前端使用 Vue 2 + Element UI，线上后端使用 Cloudflare Pages Worker，业务数据持久化到 Supabase PostgreSQL 独立 schema。
 
-## 在线演示
+## 在线系统
 
 | 项目 | 地址 |
 | --- | --- |
@@ -10,7 +10,7 @@
 | CloudBase API | https://ot-qiyerenyuan-api-273280-7-1369167244.sh.run.tcloudbase.com |
 | GitHub 仓库 | https://github.com/Nemo-netone/ot-qiyerenyuan |
 
-演示账号：
+初始账号：
 
 | 角色 | 用户名 | 密码 |
 | --- | --- | --- |
@@ -108,17 +108,17 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 
 ## 2026-07-11 Pages Worker 恢复部署
 
-原 CloudBase Run 后端已出现 503、CORS 或资源隔离问题。线上演示已切换为 Cloudflare Pages Worker + Supabase 独立 schema：
+原 CloudBase Run 后端已出现 503、CORS 或资源隔离问题。线上系统已切换为 Cloudflare Pages Worker + Supabase 独立 schema：
 
 - Pages 项目：`ot-qiyerenyuan`
 - 稳定地址：https://ot-qiyerenyuan.pages.dev
 - Supabase schema：`hrm_qiyerenyuan`
 - API：`/health`、`/api/login`、`/api/summary`、`/api/items/*`
-- 数据：3 个公开演示账号、18 条业务记录
+- 数据：3 个初始账号及各业务模块持久化数据
 - 验证：全部账号登录、summary、列表、创建、更新、删除清理和 Playwright 登录前后视图均通过
 
 原 Java/Vue/SSM 源码继续保留；兼容层只负责稳定的公开作品集体验。
-## 2026-07-13 演示能力升级
+## 2026-07-13 正式部署升级
 
 - 10 个核心业务模块已接入 Supabase 持久化兼容层。
 - 使用可验证的 HMAC 登录 token，业务接口统一鉴权。

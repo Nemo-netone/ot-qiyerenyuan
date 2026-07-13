@@ -22,6 +22,7 @@ def run():
         code = f"e2e-{int(time.time())}"
         created = api_json(request.post("/staff", headers=headers, data={
             "code": code,
+            "password": "Test123456",
             "name": "端到端验收员工",
             "gender": "女",
             "phone": "13900009999",
@@ -61,6 +62,7 @@ def run():
             ("权限管理", [("角色管理", "/permission/role"), ("菜单管理", "/permission/menu")]),
         ]
         page_results = {}
+        empty_list_routes = {"/system/docs"}
         for parent, children in groups:
             sidebar = page.locator(".el-menu")
             first_child = sidebar.get_by_text(children[0][0], exact=True)
@@ -76,11 +78,13 @@ def run():
                 page.wait_for_timeout(1200)
                 body = page.locator("body").inner_text()
                 rows = page.locator(".el-table__body-wrapper tbody tr").count()
-                page_results[route] = page.url.endswith(route) and len(body) > 140 and rows > 0
+                table_visible = page.locator(".el-table").is_visible()
+                data_rendered = rows > 0 or route in empty_list_routes
+                page_results[route] = page.url.endswith(route) and len(body) > 140 and table_visible and data_rendered
         results["page_results"] = page_results
         results["all_pages_render"] = all(page_results.values())
         results["browser_errors"] = browser_errors
-        results["demo_notice"] = "作品集演示模式" in page.locator("body").inner_text()
+        results["no_demo_notice"] = "作品集演示模式" not in page.locator("body").inner_text()
 
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         mobile.goto(BASE_URL, wait_until="networkidle")

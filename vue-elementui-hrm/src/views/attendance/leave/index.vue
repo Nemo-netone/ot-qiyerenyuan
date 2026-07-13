@@ -101,6 +101,7 @@
 import { edit, getExportApi, getImportApi, getList } from '../../../api/staffLeave'
 import { mapState } from 'vuex'
 import { getAllDept } from '@/api/dept'
+import { flattenDepartmentOptions } from '@/utils/departments'
 
 export default {
   name: 'Leave',
@@ -170,17 +171,7 @@ export default {
     // 将数据渲染到模板
     loading () {
       getAllDept().then(response => {
-        const list = []
-        response.data.forEach(dept => {
-          if (dept.children.length > 0) {
-            dept.disabled = true
-            list.push(dept)
-            dept.children.forEach(subDept => {
-              list.push(subDept)
-            })
-          }
-        })
-        this.searchForm.deptList = list
+        this.searchForm.deptList = flattenDepartmentOptions(response.data)
       })
       getList({
         current: this.table.pageConfig.current,

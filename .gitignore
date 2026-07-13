@@ -20,6 +20,10 @@ dist/
 vue-elementui-hrm/dist/
 yarn.lock
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Local env and platform cache
 .env.local
 .env.*.local

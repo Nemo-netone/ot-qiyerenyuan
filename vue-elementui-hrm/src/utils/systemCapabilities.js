@@ -11,7 +11,7 @@ const applyReadOnlyUi = root => {
   })
 }
 
-export const installDemoCapabilities = Vue => {
+export const installSystemCapabilities = Vue => {
   Vue.mixin({
     mounted () {
       this.$nextTick(() => applyReadOnlyUi(this.$el))

@@ -62,6 +62,9 @@ export const getExportApi = () => {
   return buildApiUrl(url + '/export')
 }
 
+export const getAvatarUploadApi = () => buildApiUrl(url + '/avatar')
+export const getAvatarApi = name => buildApiUrl(url + '/avatar/' + encodeURIComponent(name))
+
 // 为员工设置角色
 export const setRole = (id, data) => {
   return request({

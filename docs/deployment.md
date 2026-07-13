@@ -72,12 +72,12 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 
 ## 2026-07-11 Pages Worker 恢复部署
 
-原 CloudBase Run 后端已出现 503、CORS 或资源隔离问题。线上演示已切换为 Cloudflare Pages Worker 兼容层：
+原 CloudBase Run 后端已出现 503、CORS 或资源隔离问题。线上系统已切换为 Cloudflare Pages Worker 正式接口层：
 
 - Pages 项目：`ot-qiyerenyuan`
 - 稳定地址：https://ot-qiyerenyuan.pages.dev
 - API：`/health`、`/login`、`/home/*`、`/staff/*`、`/dept/*`、`/menu/*` 等原 HRM 路由
-- 数据：3 个公开演示账号和各业务模块演示数据
+- 数据：初始账号和各业务模块持久化数据
 - 原 Java/Vue/SSM 源码继续保留；Pages Worker 负责稳定的公开作品集体验
 
 ## 2026-07-12 列表功能修复部署
@@ -117,13 +117,13 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 - Playwright 检查：标题文字、白色样式、字体和居中位置正确，无 `pageerror`
 ## 2026-07-13 功能真实性与安全优化
 
-本次完成作品集演示的五项核心优化：
+本次完成正式部署的核心安全与业务优化：
 
 1. 员工、部门、文档、考勤、请假、城市社保、社保、薪资、角色和菜单数据通过 Supabase `items` 表持久化，新增、修改、删除和审批刷新后仍保留。
 2. 登录从 Supabase `accounts` 表校验，Worker 签发 HMAC token；除登录和健康检查外，全部业务接口要求有效 token。
 3. 管理员和人事专员可以写入，普通员工为只读账号；未登录返回 HTTP 401，越权写入返回 HTTP 403。
 4. 390px 移动端默认折叠为 64px 侧栏、隐藏标签栏、内容区无横向页面溢出。
-5. 页面明确展示作品集演示说明；CSV 导入导出、文件上传下载均真实落库并经过端到端验证。
+5. CSV 导入导出、文件上传下载均真实落库并经过端到端验证。
 6. Cloudflare Pages 必须配置加密 Secret：`AUTH_SECRET`、`SUPABASE_SERVICE_ROLE_KEY`、`SUPABASE_URL`、`SUPABASE_SCHEMA`。
 7. Supabase RPC 仅授权 `service_role`，不向 `anon` 或 `authenticated` 开放。
 

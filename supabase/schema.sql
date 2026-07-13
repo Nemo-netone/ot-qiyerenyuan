@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS hrm_qiyerenyuan.accounts (
 ALTER TABLE hrm_qiyerenyuan.accounts ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE hrm_qiyerenyuan.accounts ADD COLUMN IF NOT EXISTS password_salt TEXT;
 ALTER TABLE hrm_qiyerenyuan.accounts ALTER COLUMN password DROP NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_unique ON hrm_qiyerenyuan.accounts (username);
 
 CREATE TABLE IF NOT EXISTS hrm_qiyerenyuan.staff_roles (
   staff_id BIGINT NOT NULL,
@@ -61,8 +62,8 @@ INSERT INTO hrm_qiyerenyuan.accounts (id, role, username, password, password_has
   (3, 'staff', 'hr01', NULL, '8YSyjd5msUmPIVvLQ5NcEsa1_WfoBEsmhIDFSdJ2Wt0', 'staff-demo-salt', '人事专员')
 ON CONFLICT (role, username) DO UPDATE SET
   password = NULL,
-  password_hash = EXCLUDED.password_hash,
-  password_salt = EXCLUDED.password_salt,
+  password_hash = COALESCE(hrm_qiyerenyuan.accounts.password_hash, EXCLUDED.password_hash),
+  password_salt = COALESCE(hrm_qiyerenyuan.accounts.password_salt, EXCLUDED.password_salt),
   display_name = EXCLUDED.display_name;
 
 INSERT INTO hrm_qiyerenyuan.staff_roles (staff_id, role_id) VALUES (1, 1), (2, 3), (3, 2)
@@ -107,7 +108,14 @@ ON CONFLICT (id) DO UPDATE SET
 SELECT setval(pg_get_serial_sequence('hrm_qiyerenyuan.accounts', 'id'), COALESCE((SELECT MAX(id) FROM hrm_qiyerenyuan.accounts), 1), true);
 SELECT setval(pg_get_serial_sequence('hrm_qiyerenyuan.items', 'id'), COALESCE((SELECT MAX(id) FROM hrm_qiyerenyuan.items), 1), true);
 
-CREATE OR REPLACE FUNCTION public.hrm_qiyerenyuan_demo_rest(
+DELETE FROM hrm_qiyerenyuan.items AS item
+WHERE item.module_key = 'hrm_docs'
+  AND NOT EXISTS (
+    SELECT 1 FROM hrm_qiyerenyuan.files AS file
+    WHERE file.name = item.extra ->> 'name'
+  );
+
+CREATE OR REPLACE FUNCTION public.hrm_qiyerenyuan_rest(
   p_table_name TEXT,
   p_method TEXT DEFAULT 'GET',
   p_query JSONB DEFAULT '{}'::jsonb,
@@ -191,5 +199,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.hrm_qiyerenyuan_demo_rest(TEXT, TEXT, JSONB, JSONB) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.hrm_qiyerenyuan_demo_rest(TEXT, TEXT, JSONB, JSONB) TO service_role;
+REVOKE ALL ON FUNCTION public.hrm_qiyerenyuan_rest(TEXT, TEXT, JSONB, JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.hrm_qiyerenyuan_rest(TEXT, TEXT, JSONB, JSONB) TO service_role;
+DROP FUNCTION IF EXISTS public.hrm_qiyerenyuan_demo_rest(TEXT, TEXT, JSONB, JSONB);
