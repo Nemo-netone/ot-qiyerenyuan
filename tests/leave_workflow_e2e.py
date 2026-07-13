@@ -41,7 +41,7 @@ with sync_playwright() as playwright:
         "startDate": start_date,
         "days": 1,
     })
-    assert duplicate.status == 409
+    assert duplicate.json()["code"] == 409
 
     approved = api_json(request.put("/staff-leave", headers=admin_headers, data={"id": created["id"], "status": "已通过"}))["data"]["staffLeave"]
     assert approved["status"] == "已通过"
@@ -52,7 +52,7 @@ with sync_playwright() as playwright:
         assert attendance["status"] == "请假"
 
     approved_delete = request.delete(f"/staff-leave/{created['id']}", headers=employee_headers)
-    assert approved_delete.status == 400
+    assert approved_delete.json()["code"] == 400
     for attendance_date in (start_date, second_date):
         api_json(request.put("/attendance/set", headers=admin_headers, data={
             "staffId": staff_id,
