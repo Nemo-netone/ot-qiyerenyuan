@@ -119,6 +119,9 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 
 本次完成正式部署的核心安全与业务优化：
 
+- 请假申请开放给普通员工本人，服务端强制校验部门假期规则和重复待审批记录。
+- 请假审批采用明确状态机，批准后自动同步对应日期考勤；撤销、驳回和历史删除均按账号权限执行。
+
 1. 员工、部门、文档、考勤、请假、城市社保、社保、薪资、角色和菜单数据通过 Supabase `items` 表持久化，新增、修改、删除和审批刷新后仍保留。
 2. 登录从 Supabase `accounts` 表校验，Worker 签发 HMAC token；除登录和健康检查外，全部业务接口要求有效 token。
 3. 管理员和人事专员可以写入，普通员工为只读账号；未登录返回 HTTP 401，越权写入返回 HTTP 403。

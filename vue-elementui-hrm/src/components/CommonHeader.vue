@@ -147,7 +147,8 @@
               </el-select>
             </el-form-item>
             <el-form-item label="起始日期" prop="startDate">
-              <el-date-picker v-model="leaveForm.formData.startDate" :pickerOptions="leaveForm.pickerOptions"/>
+              <el-date-picker v-model="leaveForm.formData.startDate" value-format="yyyy-MM-dd"
+                              :pickerOptions="leaveForm.pickerOptions"/>
             </el-form-item>
             <el-form-item label="请假天数" prop="days">
               <el-input-number v-model="leaveForm.formData.days" :min="1" style="width:38%" step-strictly/>
@@ -192,7 +193,8 @@
                              @click="cancel(scope.row)"
                   >撤销 <i class="el-icon-scissors"></i
                   ></el-button>
-                  <el-button v-if="scope.row.staffLeave.status!==scope.row.unaudited" size="mini" type="danger"
+                  <el-button v-if="[scope.row.reject, scope.row.cancel].includes(scope.row.staffLeave.status)"
+                             size="mini" type="danger"
                              @click="handleDelete(scope.row)"
                   >删除 <i class="el-icon-brush"></i
                   ></el-button>
@@ -253,7 +255,11 @@ export default {
       }
     }
     const checkDays = (rule, value, callback) => {
-      const leaveType = this.leaveForm.leaveTypeList.find(item => item.typeId === this.leaveForm.formData.typeId)
+      const leaveType = this.leaveForm.leaveTypeList.find(item => item.typeNum === this.leaveForm.formData.typeNum)
+      if (!leaveType) {
+        callback(new Error('请先选择假期类型'))
+        return
+      }
       if (value > leaveType.days) {
         callback(new Error('部门规定，' + leaveType.typeNum + '休假天数不超过' + leaveType.days + '天!'))
       } else {
@@ -371,7 +377,7 @@ export default {
     applyLeave () {
       // 当有假期未被审核时，不得请假
       getUnauditedByStaffId(this.staff.id).then(response => {
-        if (response.code === 200) {
+        if (response.code === 200 && response.data) {
           this.$message.error('你有未被审批的休假申请，目前不能请假！')
         } else {
           this.$refs.leaveForm.validate(valid => {
@@ -380,8 +386,10 @@ export default {
               add(this.leaveForm.formData).then(response => {
                 if (response.code === 200) {
                   this.$message.success('提交成功！')
+                  this.leaveForm.formData = {}
+                  this.loading()
                 } else {
-                  this.$message.error('提交失败')
+                  this.$message.error(response.message || '提交失败')
                 }
               })
             } else {

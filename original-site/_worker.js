@@ -214,14 +214,95 @@ async function staffLeave(action, id, params, method, env, session) {
   const rows = await loadModule(env, "hrm_leave", leaveRows().map((row) => row.staffLeave));
   if (action === "all") return ok({ data: scopeRows(rows, session) });
   if (action === "staff" && id) {
-    const row = rows.find((item) => String(item.staffId || item.id) === String(id) && item.status === "待审核");
+    if (session.role === "user" && String(id) !== String(session.staffId)) throw apiError("只能查看本人的请假申请", 403, 900);
+    const row = rows.find((item) => String(item.staffId) === String(id) && item.status === "待审核");
     return ok({ data: row || null });
   }
   if (action === "staff") return page(scopeRows(rows, session).map(toLeaveView), params);
   if (method === "GET") return page(scopeRows(rows, session).map(toLeaveView), params);
-  const result = await mutateModule("hrm_leave", action, id, params, method, env, session);
-  if (result.data) result.data = toLeaveView(result.data);
-  return result;
+  if (method === "POST") return createLeave(params, rows, env, session);
+  if (method === "PUT" || method === "PATCH") return updateLeave(params, rows, env, session);
+  if (method === "DELETE") return deleteLeave(action, id, rows, env, session);
+  return fail("不支持的请假操作", 400);
+}
+
+async function createLeave(params, rows, env, session) {
+  const staffId = Number(params.staffId || session.staffId);
+  if (session.role === "user" && String(staffId) !== String(session.staffId)) throw apiError("只能提交本人的请假申请", 403, 900);
+  const staffRowsData = await loadModule(env, "hrm_staff", staffRows());
+  const staff = staffRowsData.find((item) => String(item.id) === String(staffId));
+  if (!staff) return fail("员工档案不存在", 404);
+  if (rows.some((item) => String(item.staffId) === String(staffId) && item.status === "待审核")) return fail("已有待审批的请假申请", 409);
+  const startDate = normalizeDate(params.startDate);
+  const days = Number(params.days || 0);
+  if (!startDate || !Number.isInteger(days) || days < 1) return fail("请填写有效的开始日期和请假天数", 400);
+  if (startDate < new Date().toISOString().slice(0, 10)) return fail("不能申请过去日期的请假", 400);
+  const endDate = addDays(startDate, days - 1);
+  const overlaps = rows.some((item) => String(item.staffId) === String(staffId) && ["待审核", "已通过"].includes(item.status) && dateRangesOverlap(startDate, endDate, normalizeDate(item.startDate), addDays(normalizeDate(item.startDate), Number(item.days || 1) - 1)));
+  if (overlaps) return fail("申请日期与已有请假记录重叠", 409);
+  const policies = await loadModule(env, "hrm_leave_policy", leavePolicyRows());
+  const policy = policies.find((item) => Number(item.deptId) === Number(staff.deptId) && String(item.typeNum) === String(params.typeNum));
+  if (!policy || policy.status === 0 || policy.status === "0" || policy.status === false) return fail("该部门未启用此假期类型", 400);
+  if (days > Number(policy.days || 0)) return fail(`${policy.typeNum}最多可申请 ${policy.days} 天`, 400);
+  const record = { ...params, staffId, code: staff.code, name: staff.name, deptId: staff.deptId, deptName: staff.deptName, phone: staff.phone, startDate, days, status: "待审核", createTime: now() };
+  const inserted = await requestSupabase(env, "items", "POST", {}, itemPayload("hrm_leave", record));
+  return ok({ data: toLeaveView(decodeItem(inserted[0])) });
+}
+
+async function updateLeave(params, rows, env, session) {
+  const previous = rows.find((item) => String(item.id) === String(params.id));
+  if (!previous) return fail("请假申请不存在", 404);
+  const isOwner = String(previous.staffId) === String(session.staffId);
+  const nextStatus = String(params.status || previous.status);
+  if (session.role === "user") {
+    if (!isOwner) throw apiError("只能操作本人的请假申请", 403, 900);
+    if (previous.status !== "待审核" || nextStatus !== "已撤销") return fail("待审批申请只能撤销", 400);
+  } else if (previous.status !== "待审核" || !["已通过", "已驳回"].includes(nextStatus)) {
+    return fail("只能审批待审核的请假申请", 400);
+  }
+  const record = { ...previous, status: nextStatus, auditTime: now(), auditor: session.username };
+  const changed = await requestSupabase(env, "items", "PATCH", { id: `eq.${previous.id}`, module_key: "eq.hrm_leave" }, itemPayload("hrm_leave", record));
+  if (nextStatus === "已通过") await applyLeaveToAttendance(record, env, session);
+  return ok({ data: toLeaveView(decodeItem(changed[0])) });
+}
+
+async function deleteLeave(action, id, rows, env, session) {
+  const ids = action === "batch" ? String(id || "").split(",").filter(Boolean) : [action];
+  for (const itemId of ids) {
+    const record = rows.find((item) => String(item.id) === String(itemId));
+    if (!record) continue;
+    if (session.role === "user" && String(record.staffId) !== String(session.staffId)) throw apiError("只能删除本人的请假记录", 403, 900);
+    if (record.status === "待审核") return fail("待审批申请请先撤销", 400);
+    if (session.role === "user" && record.status === "已通过") return fail("已批准的请假记录不能删除", 400);
+    await requestSupabase(env, "items", "DELETE", { id: `eq.${record.id}`, module_key: "eq.hrm_leave" });
+  }
+  return ok({ data: null });
+}
+
+async function applyLeaveToAttendance(leave, env, session) {
+  const start = new Date(`${normalizeDate(leave.startDate)}T00:00:00Z`);
+  for (let offset = 0; offset < Number(leave.days || 0); offset += 1) {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + offset);
+    const result = await setAttendance({ staffId: leave.staffId, attendanceDate: date.toISOString().slice(0, 10), status: "请假" }, env, session);
+    if (result.code !== 200) throw apiError(result.message, result.code, result.code);
+  }
+}
+
+function normalizeDate(value) {
+  const match = String(value || "").trim().match(/^\d{4}-\d{2}-\d{2}/);
+  if (!match || Number.isNaN(Date.parse(`${match[0]}T00:00:00Z`))) return "";
+  return match[0];
+}
+
+function addDays(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return date.toISOString().slice(0, 10);
+}
+
+function dateRangesOverlap(leftStart, leftEnd, rightStart, rightEnd) {
+  return Boolean(rightStart && rightEnd && leftStart <= rightEnd && rightStart <= leftEnd);
 }
 
 async function insurance(action, id, params, method, env, session) {
