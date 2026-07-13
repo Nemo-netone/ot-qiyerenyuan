@@ -409,7 +409,6 @@ export default {
       })
     },
     selectChange (id) {
-      console.log('城市id', id)
       this.dialogForm.cityList.forEach(item => {
         if (item.id === id) {
           this.insuranceTable.tableData = [item]

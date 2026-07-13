@@ -60,4 +60,10 @@ export default {
     cursor: pointer;
   }
 }
+
+@media (max-width: 768px) {
+  .tag {
+    display: none;
+  }
+}
 </style>

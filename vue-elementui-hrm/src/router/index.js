@@ -74,32 +74,28 @@ export const setDynamicRoute = (menuList) => {
   router.addRoute(dynamicRoute) // addRoute()只负责添加路由，但不去重
 }
 
-router.beforeEach((to, from, next) => {
-  // 如果有匹配的路由，则直接跳转
-  if (to.matched.length === 0) {
-    // 如果token存在，则说明已经登录，否则回到登录页面
-    if (store.state.token.token) {
-      // 请求菜单数据
-      getStaffMenu().then(response => {
-        if (response.code === 200) {
-          const menuList = response.data
-          // 任何人都可访问主页
-          menuList.push({
-            id: 0,
-            code: 'home',
-            name: '首页',
-            icon: 's-home',
-            path: '/home',
-            children: []
-          })
-          // 设置动态路由
-          setDynamicRoute(menuList)
-          // 设置菜单
-          store.commit('menu/SET_MENU', menuList)
-        }
+router.beforeEach(async (to, from, next) => {
+  const token = store.state.token.token
+  if (!token && to.name !== 'login') return next({ name: 'login' })
+  if (token && to.name === 'login') return next('/home')
+  if (token && to.matched.length === 0) {
+    try {
+      const response = await getStaffMenu()
+      if (response.code !== 200) throw new Error(response.message)
+      const menuList = response.data.concat({
+        id: 0,
+        code: 'home',
+        name: '首页',
+        icon: 's-home',
+        path: '/home',
+        children: []
       })
-    } else {
-      next({ name: 'login' })
+      setDynamicRoute(menuList)
+      store.commit('menu/SET_MENU', menuList)
+      return next({ ...to, replace: true })
+    } catch (error) {
+      await store.dispatch('staff/logout')
+      return next({ name: 'login' })
     }
   }
   next()

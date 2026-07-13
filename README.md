@@ -118,4 +118,11 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 - 验证：全部账号登录、summary、列表、创建、更新、删除清理和 Playwright 登录前后视图均通过
 
 原 Java/Vue/SSM 源码继续保留；兼容层只负责稳定的公开作品集体验。
+## 2026-07-13 演示能力升级
 
+- 10 个核心业务模块已接入 Supabase 持久化兼容层。
+- 使用可验证的 HMAC 登录 token，业务接口统一鉴权。
+- 管理员、人事专员可维护数据，普通员工只读。
+- 移动端默认折叠侧栏并隐藏标签栏。
+- 导入、导出、文件上传明确标注为暂未开放，不再返回假成功。
+- 线上验收：`python tests/deployed_e2e.py`。

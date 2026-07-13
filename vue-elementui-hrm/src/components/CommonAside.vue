@@ -74,7 +74,7 @@ import { mapState } from 'vuex'
 export default {
   data () {
     return {
-      isCollapse: false // 控制侧边栏是否展开
+      isCollapse: window.innerWidth <= 768 // 移动端默认折叠侧边栏
     }
   },
   methods: {
@@ -96,12 +96,17 @@ export default {
     }
   },
   mounted () {
+    this.handleResize = () => {
+      if (window.innerWidth <= 768) this.isCollapse = true
+    }
+    window.addEventListener('resize', this.handleResize)
     this.$bus.$on('collapseMenu', () => {
       this.isCollapse = !this.isCollapse
     })
   },
   beforeDestroy () {
     this.$bus.$off('collapseMenu')
+    window.removeEventListener('resize', this.handleResize)
   }
 }
 </script>
