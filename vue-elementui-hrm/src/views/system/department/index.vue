@@ -211,7 +211,7 @@
     </el-dialog>
 
     <div style="margin-bottom: 10px">
-      <el-upload :action="importApi" :headers="headers" accept="xlsx" :show-file-list="false"
+      <el-upload :action="importApi" :headers="headers" accept=".csv,text/csv" :show-file-list="false"
                  :on-success="handleImportSuccess" :multiple="false"
                  style="display:inline-block;">
         <el-button type="success" size="mini"

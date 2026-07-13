@@ -11,11 +11,15 @@ const getRuntimeApiBase = () => {
   const storageApiBase = window.localStorage && window.localStorage.getItem('HRM_API_BASE_URL')
   const configApiBase = window.HRM_CONFIG && window.HRM_CONFIG.apiBase
 
-  return queryApiBase || storageApiBase || configApiBase || ''
+  if (queryApiBase !== null) return queryApiBase
+  if (storageApiBase !== null) return storageApiBase
+  if (window.HRM_CONFIG && Object.prototype.hasOwnProperty.call(window.HRM_CONFIG, 'apiBase')) return configApiBase
+  return null
 }
 
 export const getApiBaseURL = () => {
-  const apiBase = getRuntimeApiBase() || process.env.VUE_APP_BASE_API || '/dev'
+  const runtimeApiBase = getRuntimeApiBase()
+  const apiBase = runtimeApiBase !== null ? runtimeApiBase : (process.env.VUE_APP_BASE_API || '/dev')
   return apiBase === '/' ? '' : trimTrailingSlash(apiBase)
 }
 
