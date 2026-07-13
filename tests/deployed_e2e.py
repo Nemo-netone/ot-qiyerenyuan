@@ -9,6 +9,27 @@ def api_json(response):
     return response.json()
 
 
+def open_login(page):
+    last_error = None
+    for _ in range(3):
+        try:
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
+            page.locator("input").first.wait_for(timeout=30000)
+            return
+        except Exception as error:
+            last_error = error
+            page.wait_for_timeout(1000)
+    raise last_error
+
+
+def login_page(page, code="admin", password="123456"):
+    open_login(page)
+    page.locator("input").nth(0).fill(code)
+    page.locator("input").nth(1).fill(password)
+    page.get_by_role("button").last.click()
+    page.locator(".app-aside").wait_for(timeout=30000)
+
+
 def run():
     results = {}
     with sync_playwright() as playwright:
@@ -49,11 +70,7 @@ def run():
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         browser_errors = []
         page.on("pageerror", lambda error: browser_errors.append(str(error)))
-        page.goto(BASE_URL, wait_until="networkidle")
-        page.locator("input").nth(0).fill("admin")
-        page.locator("input").nth(1).fill("123456")
-        page.get_by_role("button").last.click()
-        page.wait_for_url("**/home")
+        login_page(page)
         page.wait_for_timeout(700)
         groups = [
             ("系统管理", [("员工管理", "/system/staff"), ("部门管理", "/system/department"), ("文档管理", "/system/docs")]),
@@ -85,13 +102,10 @@ def run():
         results["all_pages_render"] = all(page_results.values())
         results["browser_errors"] = browser_errors
         results["no_demo_notice"] = "作品集演示模式" not in page.locator("body").inner_text()
+        results["formal_title"] = page.title() == "人力资源管理系统｜第四组生产实习项目"
 
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
-        mobile.goto(BASE_URL, wait_until="networkidle")
-        mobile.locator("input").nth(0).fill("admin")
-        mobile.locator("input").nth(1).fill("123456")
-        mobile.get_by_role("button").last.click()
-        mobile.wait_for_url("**/home")
+        login_page(mobile)
         mobile.wait_for_timeout(500)
         results["mobile"] = {
             "aside_collapsed": mobile.locator(".el-aside").bounding_box()["width"] == 64,
