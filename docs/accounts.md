@@ -1,11 +1,8 @@
-# 演示账号
+# 初始账号
 
 ## 在线入口
 
-- 演示首页：https://ot-qiyerenyuan.pages.dev
-- 管理员自动演示：https://ot-qiyerenyuan.pages.dev/?auto=admin
-- 普通用户自动演示：https://ot-qiyerenyuan.pages.dev/?auto=user
-- 工作人员自动演示：https://ot-qiyerenyuan.pages.dev/?auto=staff
+- 系统地址：https://ot-qiyerenyuan.pages.dev
 
 ## 公开账号
 
@@ -15,4 +12,4 @@
 | 普通员工 | `user` | `employee01` | `123456` |
 | 人事专员 | `staff` | `hr01` | `123456` |
 
-以上账号只用于公开作品集演示。不要录入真实个人、客户、支付或业务敏感数据。
+首次登录后应立即修改初始密码，并按实际岗位重新分配角色和菜单权限。

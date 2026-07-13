@@ -8,7 +8,7 @@
 | 登录失败 | `/login` 响应、Supabase `sys_staff` 数据 | 确认 `admin / 123456` 对应密码哈希存在 |
 | 接口跨域失败 | `APP_CORS_ALLOWED_ORIGINS` | 加入 Pages 域名 |
 | 数据库连不上 | CloudBase 环境变量、Supabase 连接密码 | 重置或更新数据库密码 |
-| 文件下载失败 | `FILE_UPLOAD_PATH` 和容器文件是否存在 | 演示环境文件不保证持久化 |
+| 文件下载失败 | Supabase `files` 表记录、文件名和 Worker Secret 是否正常 | 修复记录关联或重新上传文件 |
 
 ## 发布流程
 
@@ -17,7 +17,7 @@
 3. 更新 Supabase SQL 时先确认只操作 `hrm_qiyerenyuan`。
 4. 部署 CloudBase Run。
 5. 部署 Cloudflare Pages `main` 分支。
-6. 使用演示账号做线上冒烟验证。
+6. 使用管理员、人事和员工账号做线上冒烟验证。
 
 ## 回滚
 

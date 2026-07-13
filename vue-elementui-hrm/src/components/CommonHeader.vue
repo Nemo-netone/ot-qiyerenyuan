@@ -30,6 +30,12 @@
       :visible.sync="infoForm.isShow"
     >
       <el-form ref="form" label-width="100px" :model="infoForm.formData" size="mini">
+        <el-form-item label="头像" label-width="140px">
+          <el-upload :action="avatarUploadApi" :headers="headers" accept="image/png,image/jpeg" :show-file-list="false" :on-success="handleAvatarSuccess">
+            <el-avatar :size="64" :src="avatar"/>
+            <el-button type="text" style="margin-left:12px">上传头像</el-button>
+          </el-upload>
+        </el-form-item>
         <el-form-item label-width="40px" style="margin-bottom:4px ">
           <el-form-item label="姓名" style="display:inline-block;width:300px" prop="name">
             <el-input
@@ -210,7 +216,7 @@
   </header>
 </template>
 <script>
-import { checkPassword, edit, updatePassword } from '../api/staff'
+import { checkPassword, edit, getAvatarApi, getAvatarUploadApi, updatePassword } from '../api/staff'
 import { getDownloadApi } from '../api/docs'
 import { getLeaveBydeptId } from '../api/leave'
 import { add, deleteOne, edit as editLeave, getListByStaffId, getUnauditedByStaffId } from '../api/staffLeave'
@@ -223,7 +229,7 @@ export default {
     const checkPwd = (rule, value, callback) => {
       checkPassword(value, this.staff.id).then(
         response => {
-          if (response.code === 200) {
+          if (response.code === 200 && response.data === true) {
             callback()
           } else {
             callback(new Error('密码输入错误！'))
@@ -314,15 +320,28 @@ export default {
     }
   },
   computed: {
+    ...mapState('token', ['token']),
     ...mapState('staff', ['staff']),
+    headers () {
+      return { token: this.token }
+    },
+    avatarUploadApi () {
+      return getAvatarUploadApi()
+    },
     downloadApi () {
       return getDownloadApi()
     },
     avatar () {
-      return this.staff && this.staff.avatar ? this.downloadApi + this.staff.avatar : require('../assets/images/avatar.png')
+      return this.staff && this.staff.avatar ? getAvatarApi(this.staff.avatar) : require('../assets/images/avatar.png')
     }
   },
   methods: {
+    handleAvatarSuccess (response) {
+      if (response.code !== 200) return this.$message.error(response.message || '头像上传失败')
+      this.infoForm.formData.avatar = response.data.name
+      this.$store.commit('staff/SET_AVATAR', response.data.name)
+      this.$message.success('头像上传成功')
+    },
     handleDelete (row) {
       deleteOne(row.staffLeave.id).then(response => {
         if (response.code === 200) {

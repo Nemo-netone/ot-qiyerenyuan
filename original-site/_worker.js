@@ -37,11 +37,13 @@ export default {
         return serveAssetOrSpa(request, env);
       }
 
+      if (request.method === "GET" && parts[0] === "staff" && parts[1] === "avatar" && parts[2]) return await publicAvatar(request, env, decodeURIComponent(parts.slice(2).join("/")));
       const session = parts[0] === "login" ? null : await requireSession(request, env);
-      if (parts.includes("export")) return exportModule(request, env, session, parts[0]);
-      if (parts.includes("import")) return importModule(request, env, session, parts[0]);
-      if (parts[0] === "docs" && parts[1] === "upload") return uploadFile(request, env, session);
-      if (parts[0] === "docs" && parts[1] === "download") return downloadFile(request, env, session, decodeURIComponent(parts.slice(2).join("/")));
+      if (parts.includes("export")) return await exportModule(request, env, session, parts[0]);
+      if (parts.includes("import")) return await importModule(request, env, session, parts[0]);
+      if (parts[0] === "docs" && parts[1] === "upload") return await uploadFile(request, env, session);
+      if (parts[0] === "docs" && parts[1] === "download") return await downloadFile(request, env, session, decodeURIComponent(parts.slice(2).join("/")));
+      if (parts[0] === "staff" && parts[1] === "avatar") return await uploadAvatar(request, env, session);
       const params = await requestParams(request, url);
       return json(request, env, await handleApi(parts, params, request, env, session));
     } catch (error) {
@@ -69,17 +71,19 @@ async function handleApi(parts, params, request, env, session) {
 
   if (root === "login") return login(params, env);
   if (root === "menu") return menu(action, id, params, request.method, env, session);
-  if (root === "home") return home(action, env);
+  if (root === "home") return home(action, env, session);
   if (root === "staff") return staff(action, id, parts.slice(3), params, request.method, env, session);
   if (root === "department" || root === "dept") return department(action, id, params, request.method, env, session);
-  if (root === "attendance") return attendance(action, id, params, request.method, env, session);
+  if (root === "attendance") return attendance(action, id, parts.slice(3), params, request.method, env, session);
   if (root === "staff-leave") return staffLeave(action, id, params, request.method, env, session);
-  if (root === "city") return moduleApi("hrm_city", action, id, params, request.method, env, session, cityRows());
+  if (root === "city") return city(action, id, params, request.method, env, session);
   if (root === "insurance") return insurance(action, id, params, request.method, env, session);
   if (root === "salary") return salary(action, id, params, request.method, env, session);
+  if (root === "salary-deduct") return policyApi("hrm_salary_deduct", salaryDeductRows(), action, id, parts.slice(3), params, request.method, env, session);
+  if (root === "overtime") return policyApi("hrm_overtime", overtimeRows(), action, id, parts.slice(3), params, request.method, env, session);
   if (root === "role") return role(action, id, params, request.method, env, session);
-  if (root === "leave") return leave(action, id, params);
-  if (root === "docs") return moduleApi("hrm_docs", action, id, params, request.method, env, session, docsRows());
+  if (root === "leave") return policyApi("hrm_leave_policy", leavePolicyRows(), action, id, parts.slice(3), params, request.method, env, session);
+  if (root === "docs") return docs(action, id, params, request.method, env, session);
 
   return fail("业务模块不存在", 404);
 }
@@ -90,7 +94,12 @@ async function login(params, env) {
   const rows = await requestSupabase(env, "accounts", "GET", { username: `eq.${code}`, limit: "1" });
   if (!rows.length || !(await verifyPassword(password, rows[0]))) return fail("账号或密码错误", 401);
   const account = rows[0];
-  const staff = { ...staffRecord(null, code), accountId: Number(account.id), role: account.role, canWrite: ["admin", "staff"].includes(account.role) };
+  const staffList = await loadModule(env, "hrm_staff", staffRows());
+  const staffData = staffList.find((item) => item.code === code);
+  if (!staffData) return fail("登录账号未关联员工档案", 403);
+  const staff = { ...staffData, accountId: Number(account.id), role: account.role, canWrite: ["admin", "staff"].includes(account.role) };
+  const relations = await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${staff.id}` });
+  if (!relations.length) await requestSupabase(env, "staff_roles", "POST", {}, { staff_id: Number(staff.id), role_id: roleIdForAccount(account.role) });
   const token = await createToken({ id: account.id, staffId: staff.id, username: account.username, role: account.role }, env);
   return ok({ token, data: staff });
 }
@@ -104,22 +113,28 @@ async function requireSession(request, env) {
 
 async function menu(action, id, params, method, env, session) {
   if (action === "staff") return ok({ data: await menusForSession(env, session) });
-  if (action === "all") return ok({ data: flattenMenus(menuTree()) });
+  if (action === "all") return ok({ data: flattenMenus(await currentMenuTree(env)) });
   return moduleApi("hrm_menu", action, id, params, method, env, session, flattenMenus(menuTree()));
 }
 
-async function home(action, env) {
-  if (action === "staff") return ok({ data: [9, 12, 8, 6] });
+async function home(action, env, session) {
+  const staff = await loadModule(env, "hrm_staff", staffRows());
+  const scopedStaff = scopeRows(staff, session);
+  const attendance = scopeRows(await loadModule(env, "hrm_attendance", attendanceRows()), session);
+  if (action === "staff") {
+    const departmentRecords = await loadModule(env, "hrm_department", departments());
+    return ok({ data: departmentRecords.map((dept) => staff.filter((item) => Number(item.deptId) === Number(dept.id)).length) });
+  }
   if (action === "count") {
-    const rows = await loadModule(env, "hrm_staff", staffRows());
-    return ok({ data: { totalNum: rows.length, normalNum: rows.filter((row) => row.status !== false && row.status !== "异常").length, lateNum: 2, leaveEarlyNum: 1, absenteeismNum: 1 } });
+    const states = attendance.flatMap((row) => row.attendanceList || []);
+    return ok({ data: { totalNum: scopedStaff.length, normalNum: scopedStaff.filter((row) => row.status !== false && row.status !== "异常").length, lateNum: states.filter((item) => item.message === "迟到").length, leaveEarlyNum: states.filter((item) => item.message === "早退").length, absenteeismNum: states.filter((item) => item.message === "旷工").length } });
   }
   if (action === "city") return ok({ data: await loadModule(env, "hrm_city", cityRows()) });
   if (action === "department") {
     const rows = await loadModule(env, "hrm_department", departments());
     return ok({ data: rows.map((item) => ({ name: item.name, value: Number(item.staffNum || 0) })) });
   }
-  if (action === "attendance") return ok({ data: attendanceDays() });
+  if (action === "attendance") return ok({ data: attendance[0]?.attendanceList || [] });
   return ok({ data: null });
 }
 
@@ -134,7 +149,10 @@ async function staff(action, id, tail, params, method, env, session) {
     if (method === "GET") return ok({ data: (await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${id}`, order: "role_id.asc" })).map(toStaffRole) });
     requireWriteRole(session);
     await requestSupabase(env, "staff_roles", "DELETE", { staff_id: `eq.${id}` });
-    for (const roleId of normalizeIds(params)) await requestSupabase(env, "staff_roles", "POST", {}, { staff_id: Number(id), role_id: Number(roleId) });
+    const roleIds = normalizeIds(params).map(Number);
+    for (const roleId of roleIds) await requestSupabase(env, "staff_roles", "POST", {}, { staff_id: Number(id), role_id: roleId });
+    const account = await accountForStaff(env, id);
+    if (account) await requestSupabase(env, "accounts", "PATCH", { id: `eq.${account.id}` }, { role: roleIds.includes(1) ? "admin" : roleIds.includes(2) ? "staff" : "user" });
     return ok({ data: (await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${id}` })).map(toStaffRole) });
   }
   if (action === "pwd") {
@@ -152,18 +170,43 @@ async function staff(action, id, tail, params, method, env, session) {
     const rows = await loadModule(env, "hrm_staff", staffRows());
     return ok({ data: rows.find((row) => String(row.id) === String(id)) || null });
   }
+  if (!action && method === "POST") return createStaff(params, env, session);
+  if (!action && (method === "PUT" || method === "PATCH")) return updateStaff(params, env, session);
+  if ((method === "DELETE") && (action === "batch" || /^\d+$/.test(action))) return deleteStaff(action, id, env, session);
   return moduleApi("hrm_staff", action, id, params, method, env, session, staffRows(), true);
 }
 
 async function department(action, id, params, method, env, session) {
   const rows = await loadModule(env, "hrm_department", departments());
-  if (action === "all") return ok({ data: rows.map((row) => ({ ...row, children: row.children || [] })) });
+  if (action === "all") return ok({ data: departmentTree(rows) });
   return moduleApi("hrm_department", action, id, params, method, env, session, departments());
 }
 
-async function attendance(action, id, params, method, env, session) {
+async function city(action, id, params, method, env, session) {
+  if (action === "all") return ok({ data: await loadModule(env, "hrm_city", cityRows()) });
+  return moduleApi("hrm_city", action, id, params, method, env, session, cityRows());
+}
+
+async function attendance(action, id, tail, params, method, env, session) {
+  if (action === "staff" && id && tail[0]) return ok({ data: await attendanceDetail(env, id, tail[0], session) });
   if (action === "staff") return ok({ data: attendanceDays() });
-  if (action === "all") return ok({ data: scopeRows(await loadModule(env, "hrm_attendance", attendanceRows()), session) });
+  if (action === "set") return setAttendance(params, env, session);
+  if (action === "all") return ok({ data: attendanceStatusRows() });
+  if (method === "GET") {
+    const query = { ...params };
+    delete query.month;
+    const staffRowsData = scopeRows(await loadModule(env, "hrm_staff", staffRows()), session);
+    const records = await loadModule(env, "hrm_attendance", attendanceRows());
+    const joined = staffRowsData.map((staff) => {
+      const record = records.find((item) => String(item.staffId) === String(staff.id) || item.code === staff.code);
+      return { ...staff, ...(record || {}), id: record?.id || staff.id, staffId: staff.id, code: staff.code, name: staff.name, deptName: staff.deptName, phone: staff.phone, attendanceList: record?.attendanceList || attendanceDays() };
+    });
+    const rows = filterRows(joined, query);
+    const result = page(rows, params);
+    result.data.dayNum = daysInMonth(params.month);
+    result.data.month = normalizeMonth(params.month);
+    return result;
+  }
   return moduleApi("hrm_attendance", action, id, params, method, env, session, attendanceRows(), true);
 }
 
@@ -182,14 +225,62 @@ async function staffLeave(action, id, params, method, env, session) {
 }
 
 async function insurance(action, id, params, method, env, session) {
+  const staffRowsData = scopeRows(await loadModule(env, "hrm_staff", staffRows()), session);
+  const records = await loadModule(env, "hrm_insurance", insuranceRows());
   if (action === "staff") {
-    const rows = await loadModule(env, "hrm_insurance", insuranceRows());
-    return ok({ data: rows.find((row) => String(row.staffId) === String(id || params.id)) || rows[0] });
+    const staff = staffRowsData.find((item) => String(item.id) === String(id || params.id));
+    const record = records.find((item) => String(item.staffId) === String(id || params.id) || item.code === staff?.code);
+    return ok({ data: record ? { ...staff, ...record, staffId: staff?.id || record.staffId } : null });
+  }
+  if (action === "set") {
+    const cities = await loadModule(env, "hrm_city", cityRows());
+    const city = cities.find((item) => String(item.id) === String(params.cityId));
+    if (!city) return fail("社保城市不存在", 400);
+    const socialBase = Number(params.socialBase || 0);
+    const houseBase = Number(params.houseBase || 0);
+    const record = {
+      ...params,
+      cityName: city.name,
+      perSocialPay: (Number(city.perPensionRate || 0.08) + Number(city.perMedicalRate || 0.02) + Number(city.perUnemploymentRate || 0.005)) * socialBase,
+      comSocialPay: (Number(city.comPensionRate || 0) + Number(city.comMedicalRate || 0) + Number(city.comUnemploymentRate || 0) + Number(city.comMaternityRate || 0) + Number(params.comInjuryRate || 0)) * socialBase,
+      perHousePay: Number(params.perHouseRate || 0) * houseBase,
+      comHousePay: Number(params.comHouseRate || 0) * houseBase,
+    };
+    const staff = staffRowsData.find((item) => String(item.id) === String(params.staffId));
+    return upsertModuleByFields("hrm_insurance", { ...staff, ...record, staffId: Number(params.staffId) }, ["staffId"], env, session);
+  }
+  if (action === "page" || (method === "GET" && !/^\d+$/.test(action))) {
+    const joined = staffRowsData.map((staff) => {
+      const record = records.find((item) => String(item.staffId) === String(staff.id) || item.code === staff.code);
+      return { ...staff, ...(record || {}), id: record?.id || staff.id, staffId: staff.id, code: staff.code, name: staff.name, deptName: staff.deptName, phone: staff.phone };
+    });
+    return page(filterRows(joined, params), params);
   }
   return moduleApi("hrm_insurance", action, id, params, method, env, session, insuranceRows(), true);
 }
 
 async function salary(action, id, params, method, env, session) {
+  if (action === "set") {
+    const insuranceRecords = await loadModule(env, "hrm_insurance", insuranceRows());
+    const insurance = insuranceRecords.find((item) => String(item.staffId) === String(params.staffId));
+    if (!insurance) return fail("请先为员工设置社保", 400);
+    const deductions = ["lateDeduct", "leaveEarlyDeduct", "leaveDeduct", "absenteeismDeduct"].reduce((sum, key) => sum + Number(params[key] || 0), 0);
+    const social = Number(insurance.perHousePay || 0) + Number(insurance.perSocialPay || insurance.total || 0);
+    const record = { ...params, month: normalizeMonth(params.month), totalSalary: Number(params.baseSalary || 0) + Number(params.subsidy || 0) + Number(params.bonus || 0) - social - deductions };
+    return upsertModuleByFields("hrm_salary", record, ["staffId", "month"], env, session);
+  }
+  if (action === "page" || (method === "GET" && !/^\d+$/.test(action))) {
+    const staffRowsData = scopeRows(await loadModule(env, "hrm_staff", staffRows()), session);
+    const records = await loadModule(env, "hrm_salary", salaryRows());
+    const month = params.month ? normalizeMonth(params.month) : "";
+    const joined = staffRowsData.map((staff) => {
+      const record = records.find((item) => (String(item.staffId) === String(staff.id) || item.code === staff.code) && (!month || normalizeMonth(item.month || item.salaryMonth) === month));
+      return { ...staff, ...(record || {}), id: record?.id || staff.id, staffId: staff.id, code: staff.code, name: staff.name, deptName: staff.deptName, phone: staff.phone, month: record?.month || month || normalizeMonth() };
+    });
+    const query = { ...params };
+    delete query.month;
+    return page(filterRows(joined, query), params);
+  }
   return moduleApi("hrm_salary", action, id, params, method, env, session, salaryRows(), true);
 }
 
@@ -203,17 +294,6 @@ async function role(action, id, params, method, env, session) {
     return ok({ data: (await requestSupabase(env, "role_menus", "GET", { role_id: `eq.${id}` })).map(toRoleMenu) });
   }
   return moduleApi("hrm_role", action, id, params, method, env, session, roleRows());
-}
-
-function leave(action, id, params) {
-  const types = [
-    { id: 1, deptId: Number(id || params.deptId || 1), typeNum: "年假", days: 5, status: 1 },
-    { id: 2, deptId: Number(id || params.deptId || 1), typeNum: "事假", days: 3, status: 1 },
-    { id: 3, deptId: Number(id || params.deptId || 1), typeNum: "病假", days: 10, status: 1 },
-  ];
-  if (action === "all" || action === "dept") return ok({ data: types });
-  if (action === "set") return ok({ data: params });
-  return ok({ data: types[0] });
 }
 
 async function moduleApi(moduleKey, action, id, params, method, env, session, seeds, personal = false) {
@@ -242,6 +322,135 @@ async function mutateModule(moduleKey, action, id, params, method, env, session)
   }
   const rows = await requestSupabase(env, "items", "POST", {}, itemPayload(moduleKey, record));
   return ok({ data: decodeItem(rows[0]) });
+}
+
+async function createStaff(params, env, session) {
+  requireWriteRole(session);
+  const code = String(params.code || "").trim();
+  const password = String(params.password || "");
+  if (!code || !params.name) return fail("工号和姓名不能为空", 400);
+  if (password.length < 6) return fail("初始密码至少 6 位", 400);
+  const existing = await requestSupabase(env, "accounts", "GET", { username: `eq.${code}`, limit: "1" });
+  if (existing.length) return fail("工号已存在", 409);
+  const departmentRecords = await loadModule(env, "hrm_department", departments());
+  const dept = departmentRecords.find((item) => Number(item.id) === Number(params.deptId));
+  const record = { ...params, deptName: dept?.name || params.deptName || "" };
+  delete record.password;
+  const inserted = await requestSupabase(env, "items", "POST", {}, itemPayload("hrm_staff", record));
+  const staff = decodeItem(inserted[0]);
+  const salt = randomSalt();
+  await requestSupabase(env, "accounts", "POST", {}, { role: "user", username: code, password_hash: await hashPassword(password, salt), password_salt: salt, display_name: String(params.name) });
+  await requestSupabase(env, "staff_roles", "POST", {}, { staff_id: Number(staff.id), role_id: 3 });
+  return ok({ data: staff });
+}
+
+async function updateStaff(params, env, session) {
+  const rows = await loadModule(env, "hrm_staff", staffRows());
+  const previous = rows.find((item) => String(item.id) === String(params.id));
+  if (!previous) return fail("员工不存在", 404);
+  const isSelf = String(previous.id) === String(session.staffId);
+  if (session.role === "user" && !isSelf) throw apiError("只能修改本人资料", 403, 900);
+  if (session.role === "user") params = { ...previous, ...pick(params, ["id", "name", "birthday", "gender", "phone", "address", "remark", "avatar"]), code: previous.code, deptId: previous.deptId, deptName: previous.deptName, status: previous.status };
+  const duplicate = rows.find((item) => item.code === params.code && String(item.id) !== String(params.id));
+  if (duplicate) return fail("工号已存在", 409);
+  const departmentRecords = await loadModule(env, "hrm_department", departments());
+  const dept = departmentRecords.find((item) => Number(item.id) === Number(params.deptId));
+  const record = { ...params, deptName: dept?.name || params.deptName || previous.deptName };
+  delete record.password;
+  const changed = await requestSupabase(env, "items", "PATCH", { id: `eq.${record.id}`, module_key: "eq.hrm_staff" }, itemPayload("hrm_staff", record));
+  const accounts = await requestSupabase(env, "accounts", "GET", { username: `eq.${previous.code}`, limit: "1" });
+  if (accounts.length) await requestSupabase(env, "accounts", "PATCH", { id: `eq.${accounts[0].id}` }, { username: record.code, display_name: record.name });
+  return ok({ data: decodeItem(changed[0]) });
+}
+
+async function deleteStaff(action, id, env, session) {
+  requireWriteRole(session);
+  const ids = action === "batch" ? String(id || "").split(",").filter(Boolean) : [action];
+  const rows = await loadModule(env, "hrm_staff", staffRows());
+  for (const staffId of ids) {
+    const staff = rows.find((item) => String(item.id) === String(staffId));
+    if (!staff) continue;
+    if (staff.code === session.username) throw apiError("不能删除当前登录账号", 400, 400);
+    await requestSupabase(env, "accounts", "DELETE", { username: `eq.${staff.code}` });
+    await requestSupabase(env, "staff_roles", "DELETE", { staff_id: `eq.${staff.id}` });
+    if (staff.avatar) await requestSupabase(env, "files", "DELETE", { name: `eq.${staff.avatar}` });
+    for (const moduleKey of ["hrm_attendance", "hrm_insurance", "hrm_salary", "hrm_leave"]) {
+      const moduleRows = await loadModule(env, moduleKey, []);
+      for (const row of moduleRows.filter((item) => String(item.staffId) === String(staff.id) || item.code === staff.code)) {
+        await requestSupabase(env, "items", "DELETE", { id: `eq.${row.id}`, module_key: `eq.${moduleKey}` });
+      }
+    }
+    await requestSupabase(env, "items", "DELETE", { id: `eq.${staff.id}`, module_key: "eq.hrm_staff" });
+  }
+  return ok({ data: null });
+}
+
+async function policyApi(moduleKey, seeds, action, id, tail, params, method, env, session) {
+  const rows = await loadModule(env, moduleKey, seeds);
+  if (action === "all") return ok({ data: uniquePolicyTypes(rows) });
+  if (action === "dept") return ok({ data: rows.filter((item) => Number(item.deptId) === Number(id)) });
+  if (action === "set") return upsertModuleByFields(moduleKey, params, ["deptId", "typeNum"], env, session);
+  if (method === "GET" && /^\d+$/.test(action)) {
+    const typeNum = decodeURIComponent(id || tail[0] || "");
+    const row = rows.find((item) => Number(item.deptId) === Number(action) && String(item.typeNum) === typeNum);
+    return row ? ok({ data: row }) : fail("配置不存在", 404);
+  }
+  return fail("不支持的配置操作", 400);
+}
+
+async function upsertModuleByFields(moduleKey, params, fields, env, session) {
+  requireWriteRole(session);
+  const rows = await loadModule(env, moduleKey, []);
+  const existing = rows.find((row) => fields.every((field) => String(row[field] ?? "") === String(params[field] ?? "")));
+  if (existing) {
+    const record = { ...existing, ...params, id: existing.id };
+    const changed = await requestSupabase(env, "items", "PATCH", { id: `eq.${existing.id}`, module_key: `eq.${moduleKey}` }, itemPayload(moduleKey, record));
+    return ok({ data: decodeItem(changed[0]) });
+  }
+  const inserted = await requestSupabase(env, "items", "POST", {}, itemPayload(moduleKey, params));
+  return ok({ data: decodeItem(inserted[0]) });
+}
+
+async function attendanceDetail(env, staffId, date, session) {
+  if (session.role === "user" && String(staffId) !== String(session.staffId)) throw apiError("只能查看本人考勤", 403, 900);
+  const rows = await loadModule(env, "hrm_attendance", attendanceRows());
+  const staff = rows.find((item) => String(item.staffId) === String(staffId));
+  const day = staff?.attendanceList?.find((item) => item.attendanceDate === date);
+  return day ? { staffId: Number(staffId), attendanceDate: date, status: day.message, message: day.message } : null;
+}
+
+async function setAttendance(params, env, session) {
+  requireWriteRole(session);
+  const rows = await loadModule(env, "hrm_attendance", attendanceRows());
+  const staff = (await loadModule(env, "hrm_staff", staffRows())).find((item) => String(item.id) === String(params.staffId));
+  const row = rows.find((item) => String(item.staffId) === String(params.staffId) || item.code === staff?.code);
+  if (!staff) return fail("员工档案不存在", 404);
+  const status = params.status || params.message;
+  const attendanceList = [...(row?.attendanceList || attendanceDays())];
+  const index = attendanceList.findIndex((item) => item.attendanceDate === params.attendanceDate);
+  const value = { attendanceDate: params.attendanceDate, message: status, tagType: attendanceTag(status) };
+  if (index >= 0) attendanceList.splice(index, 1, value); else attendanceList.push(value);
+  attendanceList.sort((left, right) => left.attendanceDate.localeCompare(right.attendanceDate));
+  const record = { ...(row || {}), ...staff, staffId: staff.id, attendanceList };
+  const changed = row
+    ? await requestSupabase(env, "items", "PATCH", { id: `eq.${row.id}`, module_key: "eq.hrm_attendance" }, itemPayload("hrm_attendance", record))
+    : await requestSupabase(env, "items", "POST", {}, itemPayload("hrm_attendance", record));
+  return ok({ data: decodeItem(changed[0]) });
+}
+
+async function docs(action, id, params, method, env, session) {
+  if (method === "DELETE") {
+    requireWriteRole(session);
+    const ids = action === "batch" ? String(id || "").split(",").filter(Boolean) : [action];
+    const rows = await loadModule(env, "hrm_docs", docsRows());
+    for (const itemId of ids) {
+      const doc = rows.find((item) => String(item.id) === String(itemId));
+      if (doc?.name) await requestSupabase(env, "files", "DELETE", { name: `eq.${doc.name}` });
+      await requestSupabase(env, "items", "DELETE", { id: `eq.${itemId}`, module_key: "eq.hrm_docs" });
+    }
+    return ok({ data: null });
+  }
+  return moduleApi("hrm_docs", action, id, params, method, env, session, docsRows());
 }
 
 async function loadModule(env, moduleKey, seeds) {
@@ -306,9 +515,7 @@ function toLeaveView(staffLeave) {
 }
 
 function docsRows() {
-  return [
-    { name: "生产实习项目说明.pdf", originalName: "第四组生产实习项目说明.pdf", type: "PDF", size: 248, uploader: "系统管理员", createTime: now(), remark: "公开演示文档" },
-  ];
+  return [];
 }
 
 function requireWriteRole(session) {
@@ -330,24 +537,54 @@ function scopeRows(rows, session) {
 }
 
 async function accountForStaff(env, staffId) {
-  const staff = staffRecord(Number(staffId));
+  const staff = (await loadModule(env, "hrm_staff", staffRows())).find((item) => String(item.id) === String(staffId));
   if (!staff) return null;
   const rows = await requestSupabase(env, "accounts", "GET", { username: `eq.${staff.code}`, limit: "1" });
   return rows[0] || null;
 }
 
+function roleIdForAccount(role) { return role === "admin" ? 1 : role === "staff" ? 2 : 3; }
+function attendanceTag(status) { return status === "正常" ? "success" : status === "请假" ? "info" : status === "旷工" ? "danger" : "warning"; }
+function attendanceStatusRows() { return ["正常", "迟到", "早退", "请假", "旷工"].map((message, index) => ({ id: index + 1, message, tagType: attendanceTag(message) })); }
+function normalizeMonth(value) { const text=String(value || new Date().toISOString().slice(0,7)).replace(/-/g, ""); return text.length >= 6 ? text.slice(0,6) : new Date().toISOString().slice(0,7).replace("-", ""); }
+function daysInMonth(value) { const month=normalizeMonth(value); return new Date(Number(month.slice(0,4)), Number(month.slice(4,6)), 0).getDate(); }
+function uniquePolicyTypes(rows) { const seen=new Set(); return rows.filter((row) => { const key=String(row.typeNum); if(seen.has(key)) return false; seen.add(key); return true; }).map(({ id, deptId, ...row }) => row); }
+function departmentTree(rows) {
+  const map = new Map(rows.map((row) => [Number(row.id), { ...row, children: [] }]));
+  const roots = [];
+  for (const row of map.values()) {
+    const parent = map.get(Number(row.parentId));
+    if (parent && Number(row.parentId) !== 0) parent.children.push(row); else roots.push(row);
+  }
+  return roots;
+}
+
 async function menusForSession(env, session) {
-  if (session.role === "admin") return menuTree();
+  const tree = await currentMenuTree(env);
+  if (session.role === "admin") return tree;
   const relations = await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${session.staffId}` });
   const allowed = new Set();
   for (const relation of relations) {
     const menus = await requestSupabase(env, "role_menus", "GET", { role_id: `eq.${relation.role_id}` });
     menus.forEach((item) => allowed.add(Number(item.menu_id)));
   }
-  return menuTree().filter((item) => allowed.has(item.id) || item.children.some((child) => allowed.has(child.id))).map((item) => ({
+  return tree.filter((item) => allowed.has(item.id) || item.children.some((child) => allowed.has(child.id))).map((item) => ({
     ...item,
     children: item.children.filter((child) => allowed.has(child.id)),
   }));
+}
+
+async function currentMenuTree(env) {
+  const stored = await loadModule(env, "hrm_menu", flattenMenus(menuTree()));
+  const byCode = new Map(stored.map((item) => [item.code, item]));
+  const merge = item => {
+    const saved = byCode.get(item.code);
+    if (saved && (saved.status === 0 || saved.status === "0" || saved.status === false || saved.status === "停用")) return null;
+    const merged = { ...item, ...(saved || {}), id: item.id, children: [] };
+    merged.children = (item.children || []).map(merge).filter(Boolean);
+    return merged;
+  };
+  return menuTree().map(merge).filter(Boolean);
 }
 
 function randomSalt() {
@@ -393,7 +630,25 @@ async function importModule(request, env, session, root) {
   const file = form.get("file");
   if (!file || file.size > 2 * 1024 * 1024) throw apiError("请选择不超过 2MB 的 CSV 文件", 400, 400);
   const records = parseCsv(await file.text());
-  for (const record of records) await requestSupabase(env, "items", "POST", {}, itemPayload(definition[0], record));
+  if (!records.length) throw apiError("CSV 文件没有可导入数据", 400, 400);
+  const required = { staff: ["code", "name", "password"], attendance: ["staffId", "attendanceDate", "status"], department: ["name"], dept: ["name"], city: ["name"], insurance: ["staffId"], salary: ["staffId", "month"] }[root] || [];
+  records.forEach((record, index) => {
+    const missing = required.filter((field) => String(record[field] || "").trim() === "");
+    if (missing.length) throw apiError(`第 ${index + 2} 行缺少字段：${missing.join(", ")}`, 400, 400);
+  });
+  if (root === "staff") {
+    for (const record of records) {
+      const result = await createStaff(record, env, session);
+      if (result.code !== 200) throw apiError(result.message, result.code, result.code);
+    }
+  } else if (root === "attendance") {
+    for (const record of records) {
+      const result = await setAttendance(record, env, session);
+      if (result.code !== 200) throw apiError(result.message, result.code, result.code);
+    }
+  } else {
+    for (const record of records) await requestSupabase(env, "items", "POST", {}, itemPayload(definition[0], record));
+  }
   return json(request, env, ok({ data: { imported: records.length } }));
 }
 
@@ -416,6 +671,31 @@ async function downloadFile(request, env, session, name) {
   const file = rows[0];
   return new Response(base64ToBytes(file.content_base64), { headers: { "Content-Type": file.content_type, "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`, ...corsHeaders(request, env) } });
 }
+
+async function uploadAvatar(request, env, session) {
+  const form = await request.formData();
+  const file = form.get("file");
+  if (!file || file.size > 2 * 1024 * 1024 || !["image/png", "image/jpeg"].includes(file.type)) throw apiError("头像仅支持 2MB 内的 PNG/JPG", 400, 400);
+  const rows = await loadModule(env, "hrm_staff", staffRows());
+  const staff = rows.find((item) => String(item.id) === String(session.staffId));
+  if (!staff) throw apiError("员工档案不存在", 404, 404);
+  const name = `avatar-${staff.id}-${Date.now()}.${file.type === "image/png" ? "png" : "jpg"}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  await requestSupabase(env, "files", "POST", {}, { name, original_name: file.name, content_type: file.type, size: file.size, content_base64: bytesToBase64(bytes), uploader: session.username });
+  if (staff.avatar) await requestSupabase(env, "files", "DELETE", { name: `eq.${staff.avatar}` });
+  const record = { ...staff, avatar: name };
+  await requestSupabase(env, "items", "PATCH", { id: `eq.${staff.id}`, module_key: "eq.hrm_staff" }, itemPayload("hrm_staff", record));
+  return json(request, env, ok({ data: { name } }));
+}
+
+async function publicAvatar(request, env, name) {
+  if (!/^avatar-[\w.-]+$/.test(name)) return new Response("Not found", { status: 404 });
+  const rows = await requestSupabase(env, "files", "GET", { name: `eq.${name}`, limit: "1" });
+  if (!rows.length || !String(rows[0].content_type).startsWith("image/")) return new Response("Not found", { status: 404 });
+  return new Response(base64ToBytes(rows[0].content_base64), { headers: { "Content-Type": rows[0].content_type, "Cache-Control": "public, max-age=3600", ...corsHeaders(request, env) } });
+}
+
+function pick(value, keys) { return Object.fromEntries(keys.filter((key) => Object.prototype.hasOwnProperty.call(value || {}, key)).map((key) => [key, value[key]])); }
 
 function csvCell(value) { const text = String(value); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 function parseCsv(text) {
@@ -527,18 +807,19 @@ function departments() {
 
 function cityRows() {
   return [
-    { id: 1, name: "上海", comPensionRate: 0.16, comMedicalRate: 0.095, comUnemploymentRate: 0.005, comMaternityRate: 0.01 },
-    { id: 2, name: "杭州", comPensionRate: 0.15, comMedicalRate: 0.09, comUnemploymentRate: 0.005, comMaternityRate: 0.008 },
-    { id: 3, name: "南京", comPensionRate: 0.16, comMedicalRate: 0.085, comUnemploymentRate: 0.004, comMaternityRate: 0.009 },
+    { id: 1, name: "上海", perPensionRate: 0.08, perMedicalRate: 0.02, perUnemploymentRate: 0.005, comPensionRate: 0.16, comMedicalRate: 0.095, comUnemploymentRate: 0.005, comMaternityRate: 0.01 },
+    { id: 2, name: "杭州", perPensionRate: 0.08, perMedicalRate: 0.02, perUnemploymentRate: 0.005, comPensionRate: 0.15, comMedicalRate: 0.09, comUnemploymentRate: 0.005, comMaternityRate: 0.008 },
+    { id: 3, name: "南京", perPensionRate: 0.08, perMedicalRate: 0.02, perUnemploymentRate: 0.004, comPensionRate: 0.16, comMedicalRate: 0.085, comUnemploymentRate: 0.004, comMaternityRate: 0.009 },
   ];
 }
 
 function attendanceDays() {
   const labels = ["正常", "正常", "迟到", "正常", "请假", "正常", "早退"];
-  return Array.from({ length: 31 }, (_, index) => ({
-    attendanceDate: `2026-07-${String(index + 1).padStart(2, "0")}`,
+  const month = new Date().toISOString().slice(0, 7);
+  return Array.from({ length: daysInMonth(month) }, (_, index) => ({
+    attendanceDate: `${month}-${String(index + 1).padStart(2, "0")}`,
     message: labels[index % labels.length],
-    tagType: labels[index % labels.length] === "正常" ? "success" : "warning",
+    tagType: attendanceTag(labels[index % labels.length]),
   }));
 }
 
@@ -568,7 +849,7 @@ function leaveRows() {
       startDate: "2026-07-15",
       days: 2,
       status: index === 0 ? "待审核" : "已通过",
-      remark: "作品集演示请假记录",
+      remark: "员工请假记录",
     },
     unaudited: "待审核",
     approve: "已通过",
@@ -611,10 +892,34 @@ function salaryRows() {
 
 function roleRows() {
   return [
-    { id: 1, name: "系统管理员", code: "admin", remark: "拥有全部演示权限" },
+    { id: 1, name: "系统管理员", code: "admin", remark: "拥有全部系统权限" },
     { id: 2, name: "人事专员", code: "hr", remark: "管理人员与考勤薪资" },
     { id: 3, name: "普通员工", code: "employee", remark: "查看个人信息" },
   ];
+}
+
+function leavePolicyRows() {
+  return departments().flatMap((dept) => [
+    { deptId: dept.id, typeNum: "年假", days: 5, status: 1 },
+    { deptId: dept.id, typeNum: "事假", days: 3, status: 1 },
+    { deptId: dept.id, typeNum: "病假", days: 10, status: 1 },
+  ]);
+}
+
+function salaryDeductRows() {
+  return departments().flatMap((dept) => [
+    { deptId: dept.id, typeNum: "迟到", deduct: 50, status: 1 },
+    { deptId: dept.id, typeNum: "早退", deduct: 50, status: 1 },
+    { deptId: dept.id, typeNum: "旷工", deduct: 300, status: 1 },
+  ]);
+}
+
+function overtimeRows() {
+  return departments().flatMap((dept) => [
+    { deptId: dept.id, typeNum: "工作日加班", code: "工作日加班", countType: 0, timeOffFlag: 0, bonus: 100, salaryMultiple: 1.5, status: 1 },
+    { deptId: dept.id, typeNum: "周末加班", code: "周末加班", countType: 0, timeOffFlag: 0, bonus: 200, salaryMultiple: 2, status: 1 },
+    { deptId: dept.id, typeNum: "法定节假日", code: "法定节假日", countType: 0, timeOffFlag: 0, bonus: 300, salaryMultiple: 3, status: 1 },
+  ]);
 }
 
 function page(rows, params = {}) {
@@ -670,7 +975,7 @@ async function requestSupabase(env, table, method, query = {}, payload = {}) {
   const base = cleanEnv(env.SUPABASE_URL);
   const key = cleanEnv(env.SUPABASE_SERVICE_ROLE_KEY);
   if (!base || !key) throw new Error("Worker 缺少 Supabase 环境变量");
-  const response = await fetch(`${base.replace(/\/$/, "")}/rest/v1/rpc/${schema(env)}_demo_rest`, {
+  const response = await fetch(`${base.replace(/\/$/, "")}/rest/v1/rpc/${schema(env)}_rest`, {
     method: "POST",
     headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ p_table_name: table, p_method: method, p_query: query, p_payload: payload }),

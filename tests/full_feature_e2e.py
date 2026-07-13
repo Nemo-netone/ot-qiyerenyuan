@@ -7,26 +7,27 @@ def api(token,method,path,**kwargs):
 admin,ad=login('admin'); staff,sd=login('hr01'); user,ud=login('employee01')
 print('roles',ad['role'],sd['role'],ud['role'],ad['canWrite'],ud['canWrite'])
 # password change and restore
-r=api(admin,'GET','/staff/check/123456/1'); assert r.json()['data'] is True
-assert api(admin,'PUT','/staff/pwd',json={'id':1,'password':'654321'}).json()['code']==200
+r=api(admin,'GET',f"/staff/check/123456/{ad['id']}"); assert r.json()['data'] is True
+assert api(admin,'PUT','/staff/pwd',json={'id':ad['id'],'password':'654321'}).json()['code']==200
 login('admin','654321')
-assert api(login('admin','654321')[0],'PUT','/staff/pwd',json={'id':1,'password':'123456'}).json()['code']==200
+assert api(login('admin','654321')[0],'PUT','/staff/pwd',json={'id':ad['id'],'password':'123456'}).json()['code']==200
 login('admin')
 # relations persistent and restore
-old=api(admin,'GET','/staff/role/2').json()['data']; assert api(admin,'POST','/staff/role/2',json=[2,3]).json()['code']==200
-assert [x['roleId'] for x in api(admin,'GET','/staff/role/2').json()['data']]==[2,3]
-api(admin,'POST','/staff/role/2',json=[x['roleId'] for x in old])
+old=api(admin,'GET',f"/staff/role/{sd['id']}").json()['data']; assert api(admin,'POST',f"/staff/role/{sd['id']}",json=[2,3]).json()['code']==200
+assert [x['roleId'] for x in api(admin,'GET',f"/staff/role/{sd['id']}").json()['data']]==[2,3]
+api(admin,'POST',f"/staff/role/{sd['id']}",json=[x['roleId'] for x in old])
 oldm=api(admin,'GET','/role/menu/3').json()['data']; api(admin,'POST','/role/menu/3',json=[11,13,21,22,32,33]); assert [x['menuId'] for x in api(admin,'GET','/role/menu/3').json()['data']]==[11,13,21,22,32,33]; api(admin,'POST','/role/menu/3',json=[x['menuId'] for x in oldm])
 # user isolation and write deny
 rows=api(user,'POST','/staff/page',json={}).json()['data']['list']; print('user staff rows',[(x.get('id'),x.get('code')) for x in rows]); assert len(rows)==1 and rows[0]['code']=='employee01'
 assert api(user,'POST','/staff',json={'name':'denied'}).status_code==403
 # csv
 exp=api(user,'GET','/salary/export'); assert 'text/csv' in exp.headers['content-type'] and 'employee01' in exp.text
-csv='name,code,phone\n临时导入员工,temp-csv,13800009999\n'.encode('utf-8')
+csv='name,code,password,phone\n临时导入员工,temp-csv,Test123456,13800009999\n'.encode('utf-8')
 imp=api(admin,'POST','/staff/import',files={'file':('staff.csv',csv,'text/csv')}); print('imported',imp.json()); assert imp.json()['data']['imported']==1
 lst=api(admin,'POST','/staff/page',json={'code':'temp-csv'}).json()['data']['list']; assert lst; api(admin,'DELETE',f"/staff/{lst[0]['id']}")
 # file
-up=api(admin,'POST','/docs/upload',files={'file':('demo.txt',b'concrete demo file','text/plain')}); data=up.json()['data']; print('upload',data)
-down=api(user,'GET',data['url']); assert down.content==b'concrete demo file'
+up=api(admin,'POST','/docs/upload',files={'file':('system.txt',b'formal system file','text/plain')}); data=up.json()['data']; print('upload',data)
+down=api(user,'GET',data['url']); assert down.content==b'formal system file'
+doc=next(x for x in api(admin,'GET','/docs').json()['data']['list'] if x['name']==data['name']); api(admin,'DELETE',f"/docs/{doc['id']}")
 print('ALL_OK')
 

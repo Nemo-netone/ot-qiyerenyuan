@@ -6,13 +6,13 @@ import './assets/less/index.less'
 
 import store from './store'
 import router from './router' // 引入vue路由
-import { installDemoCapabilities } from './utils/demoCapabilities'
+import { installSystemCapabilities } from './utils/systemCapabilities'
 
 Vue.config.productionTip = false
 
 // 全局注入elementui，会引入全部的组件，增大了项目的体积
 Vue.use(ElementUI, { size: 'mini' })
-installDemoCapabilities(Vue)
+installSystemCapabilities(Vue)
 
 new Vue({
   store,

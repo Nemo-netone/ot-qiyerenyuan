@@ -4,7 +4,7 @@
 | --- | --- |
 | 项目 | ot-qiyerenyuan |
 | 版本 | v0.1 |
-| 目标 | 将原本地 HRM 项目整理成可公开展示、可线上运行的演示项目 |
+| 目标 | 将原本地 HRM 项目建设成可持续线上运行的人力资源管理系统 |
 | 部署目标 | Cloudflare Pages + CloudBase Run + Supabase PostgreSQL |
 
 ## 背景与目标
@@ -19,7 +19,7 @@
 | FR-02 | 员工、部门、角色、菜单可查询维护 | 页面列表可加载，新增/编辑/删除调用 API |
 | FR-03 | 考勤、请假、加班、薪资、社保模块可查询 | 对应菜单和接口可访问 |
 | FR-04 | Excel 导入导出地址可在线使用 | 前端生成的 URL 指向 CloudBase API，不再是 localhost |
-| FR-05 | 文件上传下载可演示 | 使用 CloudBase 容器临时目录，文档标注非持久化限制 |
+| FR-05 | 文件上传下载持久化 | 文件内容与元数据写入 Supabase，并支持权限校验、下载和删除清理 |
 | FR-06 | Supabase 数据不覆盖其他项目 | 所有表在 `hrm_qiyerenyuan` schema 内 |
 
 ## 非功能需求

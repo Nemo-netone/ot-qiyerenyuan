@@ -5,6 +5,12 @@
       :visible.sync="dialogForm.isShow"
     >
       <el-form ref="form" label-width="100px" :model="dialogForm.formData" size="mini">
+        <el-form-item label="工号" label-width="140px" style="width: 450px" prop="code">
+          <el-input placeholder="请输入登录工号" v-model.trim="dialogForm.formData.code"/>
+        </el-form-item>
+        <el-form-item v-if="dialogForm.type === 'add'" label="初始密码" label-width="140px" style="width: 450px" prop="password">
+          <el-input placeholder="至少 6 位" v-model.trim="dialogForm.formData.password" show-password/>
+        </el-form-item>
         <el-form-item label-width="40px" style="margin-bottom:4px ">
           <el-form-item label="姓名" style="display:inline-block;width:300px" prop="name">
             <el-input
@@ -266,6 +272,7 @@ import { getAll } from '../../../api/role'
 
 import { getAllDept } from '../../../api/dept'
 import { mapState } from 'vuex'
+import { flattenDepartmentOptions } from '@/utils/departments'
 
 export default {
   name: 'Staff',
@@ -313,17 +320,7 @@ export default {
     getDept () {
       // 获取所有部门
       getAllDept().then(response => {
-        const list = []
-        response.data.forEach(dept => {
-          if (dept.children.length > 0) {
-            dept.disabled = true
-            list.push(dept)
-            dept.children.forEach(subDept => {
-              list.push(subDept)
-            })
-          }
-        })
-        this.dialogForm.deptList = list
+        this.dialogForm.deptList = flattenDepartmentOptions(response.data)
       })
     },
     // 点击新增按钮，弹出对话框
@@ -410,17 +407,7 @@ export default {
     // 加载数据
     loading () {
       getAllDept().then(response => {
-        const list = []
-        response.data.forEach(dept => {
-          if (dept.children.length > 0) {
-            dept.disabled = true
-            list.push(dept)
-            dept.children.forEach(subDept => {
-              list.push(subDept)
-            })
-          }
-        })
-        this.searchForm.deptList = list
+        this.searchForm.deptList = flattenDepartmentOptions(response.data)
       })
       getList({
         current: this.table.pageConfig.current,

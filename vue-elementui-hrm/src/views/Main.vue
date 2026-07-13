@@ -12,9 +12,6 @@
       </el-header>
       <!-- 引入标签栏 -->
       <common-tag/>
-      <div class="demo-notice">
-        作品集演示模式：列表、新增、编辑、删除与审批会真实保存；导入、导出和文件上传暂不开放。
-      </div>
       <el-main>
         <router-view/>
         <!-- 路由视图 -->
@@ -48,16 +45,6 @@ export default {
   padding-top: 0;
 }
 
-.demo-notice {
-  padding: 7px 16px;
-  color: #8a6116;
-  background: #fff8e6;
-  border-bottom: 1px solid #f3d99b;
-  font-size: 13px;
-  line-height: 1.5;
-  text-align: center;
-}
-
 .app-aside {
   box-shadow: 2px 0 6px rgb(0 21 41 / 35%);
   z-index: 20;
@@ -79,12 +66,6 @@ export default {
   .app-content {
     min-width: 0;
     margin-left: 64px;
-  }
-
-  .demo-notice {
-    padding: 6px 8px;
-    font-size: 12px;
-    text-align: left;
   }
 
   .el-main {
