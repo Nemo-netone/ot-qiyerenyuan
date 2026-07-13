@@ -1,4 +1,5 @@
 module.exports = {
+  productionSourceMap: false,
   lintOnSave: false, // 关闭语法检查
   devServer: {
     proxy: {

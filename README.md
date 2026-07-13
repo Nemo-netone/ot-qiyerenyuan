@@ -124,5 +124,7 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 - 使用可验证的 HMAC 登录 token，业务接口统一鉴权。
 - 管理员、人事专员可维护数据，普通员工只读。
 - 移动端默认折叠侧栏并隐藏标签栏。
-- 导入、导出、文件上传明确标注为暂未开放，不再返回假成功。
+- 员工角色、角色菜单、修改密码均真实持久化，密码使用 PBKDF2-SHA256 加盐哈希存储。
+- CSV 导入导出和文档上传下载已真实实现，普通员工按个人数据范围只读访问。
+- 生产前端改为同源 Pages Worker API，移除旧 CloudBase API 地址和生产 source map。
 - 线上验收：`python tests/deployed_e2e.py`。

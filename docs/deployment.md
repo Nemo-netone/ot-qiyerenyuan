@@ -123,7 +123,9 @@ wrangler pages deploy original-site --project-name ot-qiyerenyuan --branch main
 2. 登录从 Supabase `accounts` 表校验，Worker 签发 HMAC token；除登录和健康检查外，全部业务接口要求有效 token。
 3. 管理员和人事专员可以写入，普通员工为只读账号；未登录返回 HTTP 401，越权写入返回 HTTP 403。
 4. 390px 移动端默认折叠为 64px 侧栏、隐藏标签栏、内容区无横向页面溢出。
-5. 页面明确展示作品集演示说明；导入、导出和文件上传返回 HTTP 501，不再伪装成功。
+5. 页面明确展示作品集演示说明；CSV 导入导出、文件上传下载均真实落库并经过端到端验证。
+6. Cloudflare Pages 必须配置加密 Secret：`AUTH_SECRET`、`SUPABASE_SERVICE_ROLE_KEY`、`SUPABASE_URL`、`SUPABASE_SCHEMA`。
+7. Supabase RPC 仅授权 `service_role`，不向 `anon` 或 `authenticated` 开放。
 
 验证：
 

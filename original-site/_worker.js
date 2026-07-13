@@ -37,12 +37,12 @@ export default {
         return serveAssetOrSpa(request, env);
       }
 
-      if (["import", "export", "upload", "download"].some((segment) => parts.includes(segment))) {
-        return json(request, env, fail("作品集演示暂不支持导入、导出或文件上传", 501), 501);
-      }
-
-      const params = await requestParams(request, url);
       const session = parts[0] === "login" ? null : await requireSession(request, env);
+      if (parts.includes("export")) return exportModule(request, env, session, parts[0]);
+      if (parts.includes("import")) return importModule(request, env, session, parts[0]);
+      if (parts[0] === "docs" && parts[1] === "upload") return uploadFile(request, env, session);
+      if (parts[0] === "docs" && parts[1] === "download") return downloadFile(request, env, session, decodeURIComponent(parts.slice(2).join("/")));
+      const params = await requestParams(request, url);
       return json(request, env, await handleApi(parts, params, request, env, session));
     } catch (error) {
       return json(request, env, fail(error.message || "服务异常", error.apiCode), error.httpStatus || 500);
@@ -87,11 +87,11 @@ async function handleApi(parts, params, request, env, session) {
 async function login(params, env) {
   const code = String(params.code || params.username || "").trim();
   const password = String(params.password || "").trim();
-  const rows = await requestSupabase(env, "accounts", "GET", { username: `eq.${code}`, password: `eq.${password}`, limit: "1" });
-  if (!rows.length) return fail("账号或密码错误", 401);
+  const rows = await requestSupabase(env, "accounts", "GET", { username: `eq.${code}`, limit: "1" });
+  if (!rows.length || !(await verifyPassword(password, rows[0]))) return fail("账号或密码错误", 401);
   const account = rows[0];
-  const staff = staffRecord(null, code);
-  const token = await createToken({ id: account.id, username: account.username, role: account.role }, env);
+  const staff = { ...staffRecord(null, code), accountId: Number(account.id), role: account.role, canWrite: ["admin", "staff"].includes(account.role) };
+  const token = await createToken({ id: account.id, staffId: staff.id, username: account.username, role: account.role }, env);
   return ok({ token, data: staff });
 }
 
@@ -103,7 +103,7 @@ async function requireSession(request, env) {
 }
 
 async function menu(action, id, params, method, env, session) {
-  if (action === "staff") return ok({ data: menuTree() });
+  if (action === "staff") return ok({ data: await menusForSession(env, session) });
   if (action === "all") return ok({ data: flattenMenus(menuTree()) });
   return moduleApi("hrm_menu", action, id, params, method, env, session, flattenMenus(menuTree()));
 }
@@ -124,21 +124,35 @@ async function home(action, env) {
 }
 
 async function staff(action, id, tail, params, method, env, session) {
-  if (action === "check") return ok({ data: String(id || "") === "123456" });
+  if (action === "check") {
+    const targetId = tail[0] || session.staffId;
+    if (String(targetId) !== String(session.staffId) && session.role !== "admin") throw apiError("无权校验其他账号密码", 403, 900);
+    const account = await accountForStaff(env, targetId);
+    return ok({ data: Boolean(account && await verifyPassword(decodeURIComponent(id || ""), account)) });
+  }
   if (action === "role") {
-    if (method === "GET") return ok({ data: [1, 2] });
+    if (method === "GET") return ok({ data: (await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${id}`, order: "role_id.asc" })).map(toStaffRole) });
     requireWriteRole(session);
-    return ok({ data: params });
+    await requestSupabase(env, "staff_roles", "DELETE", { staff_id: `eq.${id}` });
+    for (const roleId of normalizeIds(params)) await requestSupabase(env, "staff_roles", "POST", {}, { staff_id: Number(id), role_id: Number(roleId) });
+    return ok({ data: (await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${id}` })).map(toStaffRole) });
   }
   if (action === "pwd") {
-    requireWriteRole(session);
+    const targetId = params.id || session.staffId;
+    if (String(targetId) !== String(session.staffId) && session.role !== "admin") throw apiError("无权修改其他账号密码", 403, 900);
+    if (!params.password || String(params.password).length < 6) return fail("新密码至少 6 位", 400);
+    const account = await accountForStaff(env, targetId);
+    if (!account) return fail("账号不存在", 404);
+    const salt = randomSalt();
+    const passwordHash = await hashPassword(String(params.password), salt);
+    await requestSupabase(env, "accounts", "PATCH", { id: `eq.${account.id}` }, { password_hash: passwordHash, password_salt: salt });
     return ok({ data: true });
   }
   if (action === "info" && id) {
     const rows = await loadModule(env, "hrm_staff", staffRows());
     return ok({ data: rows.find((row) => String(row.id) === String(id)) || null });
   }
-  return moduleApi("hrm_staff", action, id, params, method, env, session, staffRows());
+  return moduleApi("hrm_staff", action, id, params, method, env, session, staffRows(), true);
 }
 
 async function department(action, id, params, method, env, session) {
@@ -149,19 +163,19 @@ async function department(action, id, params, method, env, session) {
 
 async function attendance(action, id, params, method, env, session) {
   if (action === "staff") return ok({ data: attendanceDays() });
-  if (action === "all") return ok({ data: await loadModule(env, "hrm_attendance", attendanceRows()) });
-  return moduleApi("hrm_attendance", action, id, params, method, env, session, attendanceRows());
+  if (action === "all") return ok({ data: scopeRows(await loadModule(env, "hrm_attendance", attendanceRows()), session) });
+  return moduleApi("hrm_attendance", action, id, params, method, env, session, attendanceRows(), true);
 }
 
 async function staffLeave(action, id, params, method, env, session) {
   const rows = await loadModule(env, "hrm_leave", leaveRows().map((row) => row.staffLeave));
-  if (action === "all") return ok({ data: rows });
+  if (action === "all") return ok({ data: scopeRows(rows, session) });
   if (action === "staff" && id) {
     const row = rows.find((item) => String(item.staffId || item.id) === String(id) && item.status === "待审核");
     return ok({ data: row || null });
   }
-  if (action === "staff") return page(rows.map(toLeaveView), params);
-  if (method === "GET") return page(rows.map(toLeaveView), params);
+  if (action === "staff") return page(scopeRows(rows, session).map(toLeaveView), params);
+  if (method === "GET") return page(scopeRows(rows, session).map(toLeaveView), params);
   const result = await mutateModule("hrm_leave", action, id, params, method, env, session);
   if (result.data) result.data = toLeaveView(result.data);
   return result;
@@ -172,19 +186,21 @@ async function insurance(action, id, params, method, env, session) {
     const rows = await loadModule(env, "hrm_insurance", insuranceRows());
     return ok({ data: rows.find((row) => String(row.staffId) === String(id || params.id)) || rows[0] });
   }
-  return moduleApi("hrm_insurance", action, id, params, method, env, session, insuranceRows());
+  return moduleApi("hrm_insurance", action, id, params, method, env, session, insuranceRows(), true);
 }
 
 async function salary(action, id, params, method, env, session) {
-  return moduleApi("hrm_salary", action, id, params, method, env, session, salaryRows());
+  return moduleApi("hrm_salary", action, id, params, method, env, session, salaryRows(), true);
 }
 
 async function role(action, id, params, method, env, session) {
   if (action === "all") return ok({ data: await loadModule(env, "hrm_role", roleRows()) });
   if (action === "menu") {
-    if (method === "GET") return ok({ data: [1, 2, 3, 4] });
+    if (method === "GET") return ok({ data: (await requestSupabase(env, "role_menus", "GET", { role_id: `eq.${id}`, order: "menu_id.asc" })).map(toRoleMenu) });
     requireWriteRole(session);
-    return ok({ data: params });
+    await requestSupabase(env, "role_menus", "DELETE", { role_id: `eq.${id}` });
+    for (const menuId of normalizeIds(params)) await requestSupabase(env, "role_menus", "POST", {}, { role_id: Number(id), menu_id: Number(menuId) });
+    return ok({ data: (await requestSupabase(env, "role_menus", "GET", { role_id: `eq.${id}` })).map(toRoleMenu) });
   }
   return moduleApi("hrm_role", action, id, params, method, env, session, roleRows());
 }
@@ -200,11 +216,11 @@ function leave(action, id, params) {
   return ok({ data: types[0] });
 }
 
-async function moduleApi(moduleKey, action, id, params, method, env, session, seeds) {
+async function moduleApi(moduleKey, action, id, params, method, env, session, seeds, personal = false) {
   const recordId = id || (/^\d+$/.test(action) ? action : "");
   const isListRequest = method === "GET" || action === "page";
   if (isListRequest && action !== "batch") {
-    const rows = await loadModule(env, moduleKey, seeds);
+    const rows = personal ? scopeRows(await loadModule(env, moduleKey, seeds), session) : await loadModule(env, moduleKey, seeds);
     if (recordId && action !== "page") return ok({ data: rows.find((row) => String(row.id) === String(recordId)) || null });
     return page(filterRows(rows, params), params);
   }
@@ -299,6 +315,118 @@ function requireWriteRole(session) {
   if (!session || !["admin", "staff"].includes(session.role)) throw apiError("当前账号只有查看权限", 403, 900);
 }
 
+function normalizeIds(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.ids)) return value.ids;
+  return Object.values(value || {}).filter((item) => typeof item === "number" || /^\d+$/.test(String(item)));
+}
+
+function toStaffRole(row) { return { staffId: Number(row.staff_id), roleId: Number(row.role_id) }; }
+function toRoleMenu(row) { return { roleId: Number(row.role_id), menuId: Number(row.menu_id) }; }
+
+function scopeRows(rows, session) {
+  if (!session || session.role !== "user") return rows;
+  return rows.filter((row) => String(row.staffId || row.id) === String(session.staffId) || row.code === session.username);
+}
+
+async function accountForStaff(env, staffId) {
+  const staff = staffRecord(Number(staffId));
+  if (!staff) return null;
+  const rows = await requestSupabase(env, "accounts", "GET", { username: `eq.${staff.code}`, limit: "1" });
+  return rows[0] || null;
+}
+
+async function menusForSession(env, session) {
+  if (session.role === "admin") return menuTree();
+  const relations = await requestSupabase(env, "staff_roles", "GET", { staff_id: `eq.${session.staffId}` });
+  const allowed = new Set();
+  for (const relation of relations) {
+    const menus = await requestSupabase(env, "role_menus", "GET", { role_id: `eq.${relation.role_id}` });
+    menus.forEach((item) => allowed.add(Number(item.menu_id)));
+  }
+  return menuTree().filter((item) => allowed.has(item.id) || item.children.some((child) => allowed.has(child.id))).map((item) => ({
+    ...item,
+    children: item.children.filter((child) => allowed.has(child.id)),
+  }));
+}
+
+function randomSalt() {
+  return base64UrlBytes(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+async function hashPassword(password, salt) {
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 100000 }, material, 256);
+  return base64UrlBytes(new Uint8Array(bits));
+}
+
+async function verifyPassword(password, account) {
+  if (account.password_hash && account.password_salt) return (await hashPassword(password, account.password_salt)) === account.password_hash;
+  return Boolean(account.password && account.password === password);
+}
+
+function moduleDefinition(root) {
+  const definitions = {
+    staff: ["hrm_staff", staffRows()], department: ["hrm_department", departments()], dept: ["hrm_department", departments()],
+    attendance: ["hrm_attendance", attendanceRows()], "staff-leave": ["hrm_leave", leaveRows().map((row) => row.staffLeave)],
+    city: ["hrm_city", cityRows()], insurance: ["hrm_insurance", insuranceRows()], salary: ["hrm_salary", salaryRows()],
+    role: ["hrm_role", roleRows()], docs: ["hrm_docs", docsRows()], menu: ["hrm_menu", flattenMenus(menuTree())],
+  };
+  return definitions[root];
+}
+
+async function exportModule(request, env, session, root) {
+  const definition = moduleDefinition(root);
+  if (!definition) throw apiError("该模块不支持导出", 400, 400);
+  let rows = await loadModule(env, definition[0], definition[1]);
+  rows = scopeRows(rows, session);
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row).filter((key) => typeof row[key] !== "object")))];
+  const csv = "\uFEFF" + [columns, ...rows.map((row) => columns.map((key) => row[key] ?? ""))].map((line) => line.map(csvCell).join(",")).join("\r\n");
+  return new Response(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${root}-${Date.now()}.csv"`, ...corsHeaders(request, env) } });
+}
+
+async function importModule(request, env, session, root) {
+  requireWriteRole(session);
+  const definition = moduleDefinition(root);
+  if (!definition) throw apiError("该模块不支持导入", 400, 400);
+  const form = await request.formData();
+  const file = form.get("file");
+  if (!file || file.size > 2 * 1024 * 1024) throw apiError("请选择不超过 2MB 的 CSV 文件", 400, 400);
+  const records = parseCsv(await file.text());
+  for (const record of records) await requestSupabase(env, "items", "POST", {}, itemPayload(definition[0], record));
+  return json(request, env, ok({ data: { imported: records.length } }));
+}
+
+async function uploadFile(request, env, session) {
+  requireWriteRole(session);
+  const form = await request.formData();
+  const file = form.get("file");
+  const allowed = new Set(["image/png", "image/jpeg", "application/pdf", "text/plain", "text/csv"]);
+  if (!file || file.size > 2 * 1024 * 1024 || !allowed.has(file.type)) throw apiError("仅支持 2MB 内的 PNG/JPG/PDF/TXT/CSV", 400, 400);
+  const name = `${Date.now()}-${String(file.name).replace(/[^\w.\-\u4e00-\u9fa5]/g, "_")}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const saved = await requestSupabase(env, "files", "POST", {}, { name, original_name: file.name, content_type: file.type, size: file.size, content_base64: bytesToBase64(bytes), uploader: session.username });
+  await requestSupabase(env, "items", "POST", {}, itemPayload("hrm_docs", { name, originalName: file.name, type: file.type, size: file.size, uploader: session.username, createTime: now(), fileId: saved[0]?.id }));
+  return json(request, env, ok({ data: { name, url: `/docs/download/${encodeURIComponent(name)}` } }));
+}
+
+async function downloadFile(request, env, session, name) {
+  const rows = await requestSupabase(env, "files", "GET", { name: `eq.${name}`, limit: "1" });
+  if (!rows.length) throw apiError("文件不存在", 404, 404);
+  const file = rows[0];
+  return new Response(base64ToBytes(file.content_base64), { headers: { "Content-Type": file.content_type, "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`, ...corsHeaders(request, env) } });
+}
+
+function csvCell(value) { const text = String(value); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
+function parseCsv(text) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map(parseCsvLine);
+  if (lines.length < 2) return [];
+  return lines.slice(1).map((line) => Object.fromEntries(lines[0].map((key, index) => [key, line[index] ?? ""])));
+}
+function parseCsvLine(line) { const result=[]; let value=""; let quoted=false; for(let index=0;index<line.length;index++){const char=line[index];if(char==='"'&&quoted&&line[index+1]==='"'){value+='"';index++;}else if(char==='"'){quoted=!quoted;}else if(char===','&&!quoted){result.push(value);value="";}else value+=char;}result.push(value);return result; }
+function bytesToBase64(bytes) { let binary=""; for(const byte of bytes) binary+=String.fromCharCode(byte); return btoa(binary); }
+function base64ToBytes(value) { const binary=atob(value); return Uint8Array.from(binary, (char) => char.charCodeAt(0)); }
+
 async function createToken(payload, env) {
   const body = base64Url(JSON.stringify({ ...payload, exp: Date.now() + 8 * 60 * 60 * 1000 }));
   const signature = await sign(body, env);
@@ -318,8 +446,8 @@ async function verifyToken(token, env) {
 }
 
 async function sign(value, env) {
-  const secret = cleanEnv(env.AUTH_SECRET || env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY);
-  if (!secret) throw new Error("缺少 AUTH_SECRET 或 Supabase 密钥");
+  const secret = cleanEnv(env.AUTH_SECRET);
+  if (!secret) throw new Error("Worker 缺少独立 AUTH_SECRET");
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
   return base64UrlBytes(new Uint8Array(signature));
@@ -540,7 +668,7 @@ function corsHeaders(request, env) {
 
 async function requestSupabase(env, table, method, query = {}, payload = {}) {
   const base = cleanEnv(env.SUPABASE_URL);
-  const key = cleanEnv(env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY);
+  const key = cleanEnv(env.SUPABASE_SERVICE_ROLE_KEY);
   if (!base || !key) throw new Error("Worker 缺少 Supabase 环境变量");
   const response = await fetch(`${base.replace(/\/$/, "")}/rest/v1/rpc/${schema(env)}_demo_rest`, {
     method: "POST",

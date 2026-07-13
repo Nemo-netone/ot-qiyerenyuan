@@ -22,7 +22,7 @@
     </el-dialog>
 
     <div style="margin-bottom: 10px">
-      <el-upload :action="importApi" :headers="headers" accept="xlsx" :show-file-list="false" :multiple="false"
+      <el-upload :action="importApi" :headers="headers" accept=".csv,text/csv" :show-file-list="false" :multiple="false"
                  :on-success="handleImportSuccess"
                  style="display:inline-block;">
         <el-button type="success" size="mini"
