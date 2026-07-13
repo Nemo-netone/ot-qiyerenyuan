@@ -179,11 +179,22 @@ async function staff(action, id, tail, params, method, env, session) {
 async function department(action, id, params, method, env, session) {
   const rows = await loadModule(env, "hrm_department", departments());
   if (action === "all") return ok({ data: departmentTree(rows) });
+  if (method === "DELETE") return deleteDepartments(action, id, rows, env, session);
+  if (method === "POST" || method === "PUT" || method === "PATCH") {
+    const validation = validateDepartment(params, rows);
+    if (validation) return validation;
+  }
   return moduleApi("hrm_department", action, id, params, method, env, session, departments());
 }
 
 async function city(action, id, params, method, env, session) {
   if (action === "all") return ok({ data: await loadModule(env, "hrm_city", cityRows()) });
+  const rows = await loadModule(env, "hrm_city", cityRows());
+  if (method === "DELETE") return deleteCities(action, id, rows, env, session);
+  if (method === "POST" || method === "PUT" || method === "PATCH") {
+    const validation = validateCity(params, rows);
+    if (validation) return validation;
+  }
   return moduleApi("hrm_city", action, id, params, method, env, session, cityRows());
 }
 
@@ -374,7 +385,97 @@ async function role(action, id, params, method, env, session) {
     for (const menuId of normalizeIds(params)) await requestSupabase(env, "role_menus", "POST", {}, { role_id: Number(id), menu_id: Number(menuId) });
     return ok({ data: (await requestSupabase(env, "role_menus", "GET", { role_id: `eq.${id}` })).map(toRoleMenu) });
   }
+  const rows = await loadModule(env, "hrm_role", roleRows());
+  if (method === "DELETE") return deleteRoles(action, id, rows, env, session);
+  if (method === "POST" || method === "PUT" || method === "PATCH") {
+    const validation = validateRole(params, rows);
+    if (validation) return validation;
+  }
   return moduleApi("hrm_role", action, id, params, method, env, session, roleRows());
+}
+
+function validateDepartment(params, rows) {
+  const name = String(params.name || "").trim();
+  const recordId = String(params.id || "");
+  const parentId = Number(params.parentId || 0);
+  if (!name) return fail("部门名称不能为空", 400);
+  if (rows.some((item) => String(item.id) !== recordId && String(item.name).trim() === name)) return fail("部门名称已存在", 409);
+  if (parentId && !rows.some((item) => Number(item.id) === parentId)) return fail("上级部门不存在", 400);
+  if (recordId && Number(recordId) === parentId) return fail("部门不能设置为自己的上级部门", 400);
+  return null;
+}
+
+async function deleteDepartments(action, id, rows, env, session) {
+  requireWriteRole(session);
+  const ids = action === "batch" ? String(id || "").split(",").filter(Boolean) : [action];
+  const selected = new Set(ids.map(String));
+  const staff = await loadModule(env, "hrm_staff", staffRows());
+  for (const itemId of ids) {
+    const department = rows.find((item) => String(item.id) === String(itemId));
+    if (!department) continue;
+    if (rows.some((item) => String(item.parentId || 0) === String(department.id) && !selected.has(String(item.id)))) return fail(`部门“${department.name}”下仍有子部门，不能删除`, 409);
+    if (staff.some((item) => String(item.deptId) === String(department.id))) return fail(`部门“${department.name}”仍有员工，不能删除`, 409);
+  }
+  for (const itemId of ids) {
+    for (const moduleKey of ["hrm_leave_policy", "hrm_salary_deduct", "hrm_overtime"]) {
+      const policies = await loadModule(env, moduleKey, []);
+      for (const policy of policies.filter((item) => String(item.deptId) === String(itemId))) {
+        await requestSupabase(env, "items", "DELETE", { id: `eq.${policy.id}`, module_key: `eq.${moduleKey}` });
+      }
+    }
+    await requestSupabase(env, "items", "DELETE", { id: `eq.${itemId}`, module_key: "eq.hrm_department" });
+  }
+  return ok({ data: null });
+}
+
+function validateCity(params, rows) {
+  const name = String(params.name || "").trim();
+  const recordId = String(params.id || "");
+  if (!name) return fail("城市名称不能为空", 400);
+  if (rows.some((item) => String(item.id) !== recordId && String(item.name).trim() === name)) return fail("城市名称已存在", 409);
+  const rateFields = Object.keys(params).filter((key) => key.endsWith("Rate"));
+  if (rateFields.some((key) => !Number.isFinite(Number(params[key])) || Number(params[key]) < 0 || Number(params[key]) > 1)) return fail("缴费比例必须在 0 到 1 之间", 400);
+  return null;
+}
+
+async function deleteCities(action, id, rows, env, session) {
+  requireWriteRole(session);
+  const ids = action === "batch" ? String(id || "").split(",").filter(Boolean) : [action];
+  const insurance = await loadModule(env, "hrm_insurance", insuranceRows());
+  for (const itemId of ids) {
+    const city = rows.find((item) => String(item.id) === String(itemId));
+    if (!city) continue;
+    if (insurance.some((item) => String(item.cityId) === String(city.id))) return fail(`城市“${city.name}”仍被社保记录使用，不能删除`, 409);
+  }
+  for (const itemId of ids) await requestSupabase(env, "items", "DELETE", { id: `eq.${itemId}`, module_key: "eq.hrm_city" });
+  return ok({ data: null });
+}
+
+function validateRole(params, rows) {
+  const name = String(params.name || "").trim();
+  const code = String(params.code || "").trim();
+  const recordId = String(params.id || "");
+  if (!name || !code) return fail("角色名称和编号不能为空", 400);
+  if (rows.some((item) => String(item.id) !== recordId && String(item.name).trim() === name)) return fail("角色名称已存在", 409);
+  if (rows.some((item) => String(item.id) !== recordId && String(item.code).trim() === code)) return fail("角色编号已存在", 409);
+  return null;
+}
+
+async function deleteRoles(action, id, rows, env, session) {
+  requireWriteRole(session);
+  const ids = action === "batch" ? String(id || "").split(",").filter(Boolean) : [action];
+  for (const itemId of ids) {
+    const role = rows.find((item) => String(item.id) === String(itemId));
+    if (!role) continue;
+    if (["admin", "hr", "employee"].includes(String(role.code))) return fail(`系统内置角色“${role.name}”不能删除`, 409);
+    const assignments = await requestSupabase(env, "staff_roles", "GET", { role_id: `eq.${role.id}`, limit: "1" });
+    if (assignments.length) return fail(`角色“${role.name}”仍有员工使用，不能删除`, 409);
+  }
+  for (const itemId of ids) {
+    await requestSupabase(env, "role_menus", "DELETE", { role_id: `eq.${itemId}` });
+    await requestSupabase(env, "items", "DELETE", { id: `eq.${itemId}`, module_key: "eq.hrm_role" });
+  }
+  return ok({ data: null });
 }
 
 async function moduleApi(moduleKey, action, id, params, method, env, session, seeds, personal = false) {

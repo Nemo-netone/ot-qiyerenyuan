@@ -652,7 +652,7 @@ export default {
             this.$message.success('删除成功！')
             this.loading()
           } else {
-            this.$message.error('删除失败！')
+            this.$message.error(response.message || '删除失败！')
           }
         }
       )
@@ -663,7 +663,7 @@ export default {
           this.$message.success('批量删除成功！')
           this.loading()
         } else {
-          this.$message.error('批量删除失败！')
+          this.$message.error(response.message || '批量删除失败！')
         }
       })
     },
