@@ -14,8 +14,10 @@ def open_login(page):
     for _ in range(3):
         try:
             page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
-            page.locator("input").first.wait_for(timeout=30000)
-            return
+            if page.locator(".app-aside").is_visible():
+                return False
+            page.locator(".wrapper input").first.wait_for(timeout=30000)
+            return True
         except Exception as error:
             last_error = error
             page.wait_for_timeout(1000)
@@ -23,11 +25,21 @@ def open_login(page):
 
 
 def login_page(page, code="admin", password="123456"):
-    open_login(page)
-    page.locator("input").nth(0).fill(code)
-    page.locator("input").nth(1).fill(password)
-    page.get_by_role("button").last.click()
-    page.locator(".app-aside").wait_for(timeout=30000)
+    last_error = None
+    for _ in range(3):
+        try:
+            needs_login = open_login(page)
+            if not needs_login:
+                return
+            page.locator(".wrapper input").nth(0).fill(code)
+            page.locator(".wrapper input").nth(1).fill(password)
+            page.locator(".wrapper button").click()
+            page.locator(".app-aside").wait_for(timeout=60000)
+            return
+        except Exception as error:
+            last_error = error
+            page.wait_for_timeout(1500)
+    raise last_error
 
 
 def run():
@@ -92,7 +104,10 @@ def run():
                     sidebar.get_by_text(parent, exact=True).click()
                     page.wait_for_timeout(120)
                 child_link.click()
-                page.wait_for_timeout(1200)
+                page.wait_for_url(f"**{route}", timeout=30000)
+                page.locator(".el-table").wait_for(timeout=30000)
+                if route not in empty_list_routes:
+                    page.locator(".el-table__body-wrapper tbody tr").first.wait_for(timeout=30000)
                 body = page.locator("body").inner_text()
                 rows = page.locator(".el-table__body-wrapper tbody tr").count()
                 table_visible = page.locator(".el-table").is_visible()
